@@ -12,6 +12,7 @@ import (
 type FileConfig struct {
 	Listen   string           `json:"listen"`
 	Status   FileStatusConfig `json:"status"`
+	Auth     FileAuthConfig   `json:"auth"`
 	Protocol struct {
 		ModernProtocols string `json:"modern_protocols"`
 		RegistryData    string `json:"registry_data"`
@@ -27,6 +28,13 @@ type FileConfig struct {
 		Look  Rotation `json:"look"`
 		Mode  GameMode `json:"mode"`
 	} `json:"spawn"`
+}
+
+// FileAuthConfig is the deployable JSON shape for login authentication.
+type FileAuthConfig struct {
+	Mode             LoginMode `json:"mode"`
+	YggdrasilBaseURL string    `json:"yggdrasil_base_url"`
+	OnlineServerID   string    `json:"online_server_id"`
 }
 
 // FileStatusConfig is the deployable JSON shape for server-list status.

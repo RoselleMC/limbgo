@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/md5"
 	"fmt"
 	"net"
 	"sort"
@@ -45,6 +44,11 @@ type Router struct {
 	PreventsChatReports *bool
 	ModernProtocols     *ModernProtocols
 	RegistryData        *registrydata.Data
+	LoginMode           limbgo.LoginMode
+	LoginPolicy         limbgo.LoginPolicy
+	SessionVerifier     limbgo.SessionVerifier
+	YggdrasilVerifier   limbgo.YggdrasilVerifierConfig
+	OnlineServerID      string
 }
 
 // ServeConn implements limbgo.ProtocolRouter.
@@ -102,12 +106,31 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 	if err != nil {
 		return err
 	}
-	player := limbgo.Player{
-		Name:            username,
-		UUID:            offlineUUID(username),
+	loginRequest := limbgo.LoginRequest{
+		Username:        username,
 		ProtocolVersion: int(info.ProtocolVersion),
 		RemoteAddr:      conn.RemoteAddr(),
-		Properties:      map[string]string{},
+		RequestedHost:   info.Address,
+	}
+	loginMode, err := r.resolveLoginMode(ctx, loginRequest)
+	if err != nil {
+		return err
+	}
+	var player limbgo.Player
+	switch loginMode {
+	case limbgo.LoginModeOffline:
+		player = limbgo.OfflineLoginPlayer(loginRequest)
+	case limbgo.LoginModeOnline:
+		verifier := r.sessionVerifier()
+		var profile limbgo.VerifiedProfile
+		conn, reader, profile, err = performOnlineSessionAuth(ctx, conn, reader, info.ProtocolVersion, loginPacketProtocol, loginRequest, verifier, r.OnlineServerID)
+		if err != nil {
+			_ = writeLoginDisconnect(conn, loginPacketProtocol, "Session verification failed")
+			return err
+		}
+		player = limbgo.VerifiedLoginPlayer(loginRequest, profile)
+	default:
+		return fmt.Errorf("%w: unsupported login mode %q", limbgo.ErrInvalidLogin, loginMode)
 	}
 
 	switch info.ProtocolVersion {
@@ -128,6 +151,30 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 		}
 		return writeLoginDisconnect(conn, info.ProtocolVersion, "limbgo play support currently implements protocols "+r.supportedPlayProtocols())
 	}
+}
+
+func (r Router) resolveLoginMode(ctx context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {
+	if r.LoginPolicy != nil {
+		mode, err := r.LoginPolicy.ResolveLoginMode(ctx, req)
+		if err != nil {
+			return "", err
+		}
+		if mode == "" {
+			return limbgo.LoginModeOffline, nil
+		}
+		return mode, nil
+	}
+	if r.LoginMode == "" {
+		return limbgo.LoginModeOffline, nil
+	}
+	return r.LoginMode, nil
+}
+
+func (r Router) sessionVerifier() limbgo.SessionVerifier {
+	if r.SessionVerifier != nil {
+		return r.SessionVerifier
+	}
+	return limbgo.NewYggdrasilVerifier(r.YggdrasilVerifier)
 }
 
 func (r Router) modernProtocols() (*ModernProtocols, error) {
@@ -312,17 +359,4 @@ func writeLoginDisconnect(conn net.Conn, protocol int32, message string) error {
 		return err
 	}
 	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
-}
-
-func offlineUUID(username string) string {
-	sum := md5.Sum([]byte("OfflinePlayer:" + username))
-	sum[6] = (sum[6] & 0x0f) | 0x30
-	sum[8] = (sum[8] & 0x3f) | 0x80
-	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
-		sum[0:4],
-		sum[4:6],
-		sum[6:8],
-		sum[8:10],
-		sum[10:16],
-	)
 }

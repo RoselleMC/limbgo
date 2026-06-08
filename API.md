@@ -83,6 +83,69 @@ with custom dimension properties:
 world := limbgo.DefaultWorldWithDimension("nether-login", limbgo.DimensionPreset(limbgo.DimensionNether, 256))
 ```
 
+## Login Authentication
+
+limbgo defaults to offline-mode login: the client claims a username, limbgo
+derives the vanilla offline UUID, and `Player.Verified` is false. Applications
+must treat this as an unverified claim.
+
+For Mojang or custom Yggdrasil online-mode verification, configure the protocol
+router:
+
+```go
+router := limbo.Router{
+	LoginMode: limbgo.LoginModeOnline,
+	YggdrasilVerifier: limbgo.YggdrasilVerifierConfig{
+		BaseURL: "", // empty uses https://sessionserver.mojang.com
+	},
+}
+```
+
+Set `YggdrasilVerifierConfig.BaseURL` to a custom sessionserver root when using
+a third-party Yggdrasil ecosystem:
+
+```go
+router := limbo.Router{
+	LoginMode: limbgo.LoginModeOnline,
+	YggdrasilVerifier: limbgo.YggdrasilVerifierConfig{
+		BaseURL: "https://session.example.net",
+	},
+}
+```
+
+Applications that need their own cache, proxy pool, audit, or trust policy can
+provide a callback verifier. limbgo still performs the vanilla encryption
+challenge and supplies the sessionserver-compatible proof.
+
+```go
+router := limbo.Router{
+	LoginMode: limbgo.LoginModeOnline,
+	SessionVerifier: limbgo.SessionVerifierFunc(func(ctx context.Context, proof limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+		return verifyWithApplication(ctx, proof)
+	}),
+}
+```
+
+Hybrid deployments can choose offline or online mode per connection:
+
+```go
+router := limbo.Router{
+	LoginPolicy: limbgo.LoginPolicyFunc(func(ctx context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {
+		if shouldRequireOnline(req) {
+			return limbgo.LoginModeOnline, nil
+		}
+		return limbgo.LoginModeOffline, nil
+	}),
+	SessionVerifier: appVerifier,
+}
+```
+
+`Player` exposes both the selected mode and the resulting trust metadata:
+`LoginMode`, `AuthSource`, `Verified`, `Name`, `UUID`, `Properties`, and
+`ProfileProperties`. Offline sessions use `AuthSourceOffline` and remain
+unverified. Verified sessions carry the UUID/name/properties returned by the
+configured verifier.
+
 ## Status And MOTD
 
 For static server-list data, set fields directly on `limbo.Router`:

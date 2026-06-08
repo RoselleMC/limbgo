@@ -7,11 +7,16 @@ import (
 
 // Player describes the identity known after the handshake/login stage.
 type Player struct {
-	Name            string
-	UUID            string
-	ProtocolVersion int
-	RemoteAddr      net.Addr
-	Properties      map[string]string
+	Name              string
+	UUID              string
+	ProtocolVersion   int
+	RemoteAddr        net.Addr
+	RequestedHost     string
+	LoginMode         LoginMode
+	AuthSource        string
+	Verified          bool
+	Properties        map[string]string
+	ProfileProperties []ProfileProperty
 }
 
 // Vec3 is a Minecraft world position.

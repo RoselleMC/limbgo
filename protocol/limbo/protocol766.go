@@ -181,7 +181,7 @@ func writeLoginSuccessModern(conn net.Conn, player limbgo.Player, cfg modernProt
 		return err
 	}
 	if !cfg.loginSuccessNoProperties {
-		if err := wire.WriteVarInt(&data, 0); err != nil {
+		if err := writeLoginSuccessProperties(&data, player.ProfileProperties); err != nil {
 			return err
 		}
 	}
@@ -191,6 +191,33 @@ func writeLoginSuccessModern(conn net.Conn, player limbgo.Player, cfg modernProt
 		}
 	}
 	return writeNamedPacketModern(conn, cfg, packetid.StateLogin, "success", data.Bytes())
+}
+
+func writeLoginSuccessProperties(data *bytes.Buffer, properties []limbgo.ProfileProperty) error {
+	if err := wire.WriteVarInt(data, int32(len(properties))); err != nil {
+		return err
+	}
+	for _, property := range properties {
+		if err := wire.WriteString(data, property.Name); err != nil {
+			return err
+		}
+		if err := wire.WriteString(data, property.Value); err != nil {
+			return err
+		}
+		if property.Signature == "" {
+			if err := wire.WriteBool(data, false); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := wire.WriteBool(data, true); err != nil {
+			return err
+		}
+		if err := wire.WriteString(data, property.Signature); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writeRegistryCodecModern(conn net.Conn, cfg modernProtocolConfig, registryData *registrydata.Data) error {

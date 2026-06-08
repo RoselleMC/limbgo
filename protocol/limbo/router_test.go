@@ -4,8 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"net"
 	"strings"
 	"testing"
@@ -311,6 +315,96 @@ func TestProtocol774LoginConfigurationAndChunk(t *testing.T) {
 
 func TestProtocol775LoginConfigurationAliasAndChunk(t *testing.T) {
 	testModernLoginConfigurationAndChunkWithPacketProtocol(t, protocol775, protocol774)
+}
+
+func TestProtocol774OnlineModeUsesSessionVerifierProfile(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	gotProof := make(chan limbgo.SessionProof, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Join: func(_ context.Context, session limbgo.PlayerSession, event *limbgo.JoinEvent) error {
+				player := session.Player()
+				if player.LoginMode != limbgo.LoginModeOnline || !player.Verified || player.AuthSource != "test-verifier" {
+					t.Fatalf("join player auth = %+v", player)
+				}
+				if player.Name != "VerifiedName" || player.UUID != "12345678-1234-1234-1234-1234567890ab" {
+					t.Fatalf("join player identity = %+v", player)
+				}
+				if len(player.ProfileProperties) != 1 || player.ProfileProperties[0].Signature != "texture-signature" {
+					t.Fatalf("join player properties = %+v", player.ProfileProperties)
+				}
+				if event.Player.Name != player.Name || event.Protocol != int(protocol774) {
+					t.Fatalf("join event = %+v", event)
+				}
+				return nil
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginMode:   limbgo.LoginModeOnline,
+			SessionVerifier: limbgo.SessionVerifierFunc(func(_ context.Context, proof limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				gotProof <- proof
+				return limbgo.VerifiedProfile{
+					UUID:     "12345678-1234-1234-1234-1234567890ab",
+					Name:     "VerifiedName",
+					Source:   "test-verifier",
+					Verified: true,
+					Properties: []limbgo.ProfileProperty{{
+						Name:      "textures",
+						Value:     "texture-value",
+						Signature: "texture-signature",
+					}},
+				}, nil
+			}),
+		}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	encryptionRequest := assertPacketID(t, reader, protocol774, packetid.StateLogin, "encryption_begin")
+	sharedSecret := []byte("0123456789abcdef")
+	writeEncryptionResponseFromRequest(t, clientConn, protocol774, encryptionRequest.Data, sharedSecret)
+	encryptedConn, err := newEncryptedConn(clientConn, sharedSecret)
+	if err != nil {
+		t.Fatalf("new encrypted conn: %v", err)
+	}
+	encryptedReader := bufio.NewReader(encryptedConn)
+
+	proof := <-gotProof
+	if proof.Username != "TestPlayer" || proof.ProtocolVersion != int(protocol774) || proof.RequestedHost != "localhost" || proof.ServerID == "" {
+		t.Fatalf("proof = %+v", proof)
+	}
+	success := assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "success")
+	assertModernLoginSuccess(t, success.Data, "12345678-1234-1234-1234-1234567890ab", "VerifiedName", 1)
+	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < 4; i++ {
+		assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "position")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	_ = encryptedConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
 }
 
 func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
@@ -1033,6 +1127,109 @@ func assertTransferPacket(t *testing.T, data []byte, wantHost string, wantPort i
 	if reader.Len() != 0 {
 		t.Fatalf("transfer has %d trailing bytes", reader.Len())
 	}
+}
+
+func writeEncryptionResponseFromRequest(t *testing.T, conn net.Conn, protocol int32, request []byte, sharedSecret []byte) {
+	t.Helper()
+	reader := bytes.NewReader(request)
+	if _, err := wire.ReadString(reader, 20); err != nil {
+		t.Fatalf("read server id: %v", err)
+	}
+	publicKeyBytes, err := readLoginByteArray(reader)
+	if err != nil {
+		t.Fatalf("read public key: %v", err)
+	}
+	verifyToken, err := readLoginByteArray(reader)
+	if err != nil {
+		t.Fatalf("read verify token: %v", err)
+	}
+	if protocol >= protocol766 {
+		if _, err := reader.ReadByte(); err != nil {
+			t.Fatalf("read should authenticate: %v", err)
+		}
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("encryption request has %d trailing bytes", reader.Len())
+	}
+	rawPublicKey, err := x509.ParsePKIXPublicKey(publicKeyBytes)
+	if err != nil {
+		t.Fatalf("parse public key: %v", err)
+	}
+	publicKey, ok := rawPublicKey.(*rsa.PublicKey)
+	if !ok {
+		t.Fatalf("public key type = %T", rawPublicKey)
+	}
+	encryptedSecret, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, sharedSecret)
+	if err != nil {
+		t.Fatalf("encrypt shared secret: %v", err)
+	}
+	encryptedToken, err := rsa.EncryptPKCS1v15(rand.Reader, publicKey, verifyToken)
+	if err != nil {
+		t.Fatalf("encrypt verify token: %v", err)
+	}
+	var response bytes.Buffer
+	if err := writeLoginByteArray(&response, encryptedSecret); err != nil {
+		t.Fatalf("write encrypted secret: %v", err)
+	}
+	if err := writeLoginByteArray(&response, encryptedToken); err != nil {
+		t.Fatalf("write encrypted token: %v", err)
+	}
+	writeServerboundNamedPacket(t, conn, protocol, packetid.StateLogin, "encryption_begin", response.Bytes())
+}
+
+func assertModernLoginSuccess(t *testing.T, data []byte, wantUUID string, wantName string, wantProperties int32) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	uuidBytes := make([]byte, 16)
+	if _, err := reader.Read(uuidBytes); err != nil {
+		t.Fatalf("read login uuid: %v", err)
+	}
+	gotUUID := formatUUIDBytes(uuidBytes)
+	if gotUUID != wantUUID {
+		t.Fatalf("login uuid = %q, want %q", gotUUID, wantUUID)
+	}
+	name, err := wire.ReadString(reader, 16)
+	if err != nil {
+		t.Fatalf("read login name: %v", err)
+	}
+	if name != wantName {
+		t.Fatalf("login name = %q, want %q", name, wantName)
+	}
+	properties, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read login properties count: %v", err)
+	}
+	if properties != wantProperties {
+		t.Fatalf("login properties count = %d, want %d", properties, wantProperties)
+	}
+	for i := int32(0); i < properties; i++ {
+		if _, err := wire.ReadString(reader, 32767); err != nil {
+			t.Fatalf("read property name: %v", err)
+		}
+		if _, err := wire.ReadString(reader, 32767); err != nil {
+			t.Fatalf("read property value: %v", err)
+		}
+		hasSignature, err := reader.ReadByte()
+		if err != nil {
+			t.Fatalf("read property signature flag: %v", err)
+		}
+		if hasSignature != 0 {
+			if _, err := wire.ReadString(reader, 32767); err != nil {
+				t.Fatalf("read property signature: %v", err)
+			}
+		}
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("login success has %d trailing bytes", reader.Len())
+	}
+}
+
+func formatUUIDBytes(value []byte) string {
+	return formatUUIDHex(fmt.Sprintf("%x", value))
+}
+
+func formatUUIDHex(value string) string {
+	return value[0:8] + "-" + value[8:12] + "-" + value[12:16] + "-" + value[16:20] + "-" + value[20:32]
 }
 
 func assertPacketID(t *testing.T, reader *bufio.Reader, protocol int32, state packetid.State, name string) wire.Packet {

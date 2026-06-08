@@ -80,6 +80,38 @@ func TestLoadFileConfigStatusDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadFileConfigAuthFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "limbgo.json")
+	raw := []byte(`{
+  "auth": {
+    "mode": "online",
+    "yggdrasil_base_url": "https://session.example.test",
+    "online_server_id": "limbgo-login"
+  },
+  "world": {
+    "schematic": "spawn.schem"
+  }
+}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := LoadFileConfig(path)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.Auth.Mode != LoginModeOnline {
+		t.Fatalf("auth.mode = %q", cfg.Auth.Mode)
+	}
+	if cfg.Auth.YggdrasilBaseURL != "https://session.example.test" {
+		t.Fatalf("auth.yggdrasil_base_url = %q", cfg.Auth.YggdrasilBaseURL)
+	}
+	if cfg.Auth.OnlineServerID != "limbgo-login" {
+		t.Fatalf("auth.online_server_id = %q", cfg.Auth.OnlineServerID)
+	}
+}
+
 func TestLoadFileConfigAllowsMissingSchematic(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "limbgo.json")

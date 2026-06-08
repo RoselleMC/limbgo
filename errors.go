@@ -6,6 +6,7 @@ var (
 	ErrMissingProtocolRouter = errors.New("limbgo: missing protocol router")
 	ErrMissingWorldProvider  = errors.New("limbgo: missing world provider")
 	ErrMissingSpawnResolver  = errors.New("limbgo: missing spawn resolver")
+	ErrInvalidLogin          = errors.New("limbgo: invalid login")
 	ErrMissingWorld          = errors.New("limbgo: missing world")
 	ErrUnsupportedCapability = errors.New("limbgo: unsupported session capability")
 	ErrInvalidSessionControl = errors.New("limbgo: invalid session control")

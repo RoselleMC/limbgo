@@ -49,6 +49,11 @@ func main() {
 		EnforcesSecureChat:  fileCfg.Status.EnforcesSecureChat,
 		PreviewsChat:        fileCfg.Status.PreviewsChat,
 		PreventsChatReports: fileCfg.Status.PreventsChatReports,
+		LoginMode:           fileCfg.Auth.Mode,
+		YggdrasilVerifier: limbgo.YggdrasilVerifierConfig{
+			BaseURL: fileCfg.Auth.YggdrasilBaseURL,
+		},
+		OnlineServerID: fileCfg.Auth.OnlineServerID,
 	}
 	if fileCfg.Protocol.ModernProtocols != "" {
 		router.ModernProtocols, err = limbo.LoadModernProtocolsFile(fileCfg.Protocol.ModernProtocols)

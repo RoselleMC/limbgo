@@ -102,6 +102,11 @@ The standalone command expects a small JSON config:
       "window_millis": 1000
     }
   },
+  "auth": {
+    "mode": "offline",
+    "yggdrasil_base_url": "",
+    "online_server_id": ""
+  },
   "protocol": {
     "modern_protocols": "protocol/limbo/modern_protocols.json",
     "registry_data": "protocol/registrydata/registrydata.json"
@@ -136,6 +141,14 @@ The standalone command expects a small JSON config:
 The `protocol` paths are optional. When omitted, the binary uses the embedded
 generated defaults. Supplying them is useful when testing a new protocol line or
 regenerated registry data without changing Go source.
+
+`auth` is optional. The default mode is `offline`, which accepts the claimed
+username and marks `Player.Verified` false. Set `auth.mode` to `online` to run
+the vanilla encryption/session proof flow. In online mode, empty
+`yggdrasil_base_url` uses Mojang's official sessionserver; a non-empty value is
+used as a custom Yggdrasil/sessionserver root. Application callbacks and hybrid
+per-connection policy are available through the Go API rather than the static
+JSON config.
 
 `world.schematic` is optional. When it is set, `world/schematic` loads the
 Sponge `.schem` file into a version-neutral world palette. Protocol adapters
