@@ -117,17 +117,9 @@ The standalone command expects a small JSON config:
       "has_ceiling": false,
       "ultrawarm": false,
       "natural": true,
-      "piglin_safe": false,
-      "respawn_anchor_works": false,
-      "bed_works": true,
-      "has_raids": true,
       "coordinate_scale": 1,
       "logical_height": 256,
-      "infiniburn": "#minecraft:infiniburn_overworld",
-      "effects": "minecraft:overworld",
-      "monster_spawn_block_light_limit": 0,
-      "monster_spawn_light_min": 0,
-      "monster_spawn_light_max": 7
+      "effects": "minecraft:overworld"
     }
   },
   "spawn": {
@@ -152,15 +144,16 @@ position. If the config also omits `spawn.pos`, the default spawn is
 `{ "x": 0, "y": 65, "z": 0 }`, so the bedrock block is at `0,64,0`.
 
 The `world.dimension` block is optional. `environment` accepts `overworld`,
-`nether`, or `end` and fills vanilla-like defaults for limbo-relevant client
-state. Individual fields can then override the preset. Even without mobs,
-portals, or beds, modern clients receive dimension type registry data, so limbgo
-tracks the properties that affect rendering or client behavior: `fixed_time`,
-`time`, `world_age`, `ambient_light`, `has_skylight`, `has_ceiling`, `ultrawarm`,
-`natural`, `piglin_safe`, `respawn_anchor_works`, `bed_works`, `has_raids`,
-`coordinate_scale`, `logical_height`, `infiniburn`, `effects`, and monster spawn
-light fields. Legacy clients receive the matching dimension id for overworld,
-nether, or end.
+`nether`, or `end` and fills vanilla-like defaults for client-visible limbo
+state. Individual fields can then override the preset. File config intentionally
+exposes only the parts that affect the login/chunk experience: dimension name,
+height/min-y/logical-height, sky/ceiling/warm/natural flags, ambient light,
+time/world age, coordinate scale, and visual effects. Modern clients still
+receive the full required `dimension_type` registry internally; protocol-only
+gameplay flags such as piglin safety, bed/respawn-anchor behavior, raids,
+infiniburn, and monster-spawn settings are filled from presets instead of being
+deployment config fields. Legacy clients receive the matching dimension id for
+overworld, nether, or end.
 
 ## Current Protocol State
 

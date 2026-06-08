@@ -374,6 +374,107 @@ func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
 	}
 }
 
+func TestProtocol774ActionBarAndTitleAPI(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
+				if err := session.SendActionBar(ctx, &component.Text{
+					Content: "action",
+					Extra:   []component.Component{&component.Text{Content: " rich"}},
+				}); err != nil {
+					return err
+				}
+				if err := session.ShowTitle(ctx, limbgo.Title{
+					Title:    &component.Text{Content: "Title"},
+					Subtitle: &component.Text{Content: "Subtitle"},
+					Times:    limbgo.TitleTimesTicks(5, 40, 10),
+				}); err != nil {
+					return err
+				}
+				return session.ClearTitle(ctx, true)
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	completeModernJoin(t, clientConn, reader, protocol774, protocol774)
+
+	var message bytes.Buffer
+	if err := wire.WriteString(&message, "titles"); err != nil {
+		t.Fatalf("write chat message: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "chat_message", message.Bytes())
+
+	actionBarPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "action_bar")
+	assertAnonymousNBTOnly(t, actionBarPacket.Data)
+	timePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "set_title_time")
+	assertTitleTimesPacket(t, timePacket.Data, 5, 40, 10)
+	titlePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "set_title_text")
+	assertAnonymousNBTOnly(t, titlePacket.Data)
+	subtitlePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "set_title_subtitle")
+	assertAnonymousNBTOnly(t, subtitlePacket.Data)
+	clearPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "clear_titles")
+	assertClearTitlesPacket(t, clearPacket.Data, true)
+
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol340ActionBarAndTitleAPI(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	errCh := make(chan error, 1)
+	go func() {
+		adapter := newPlayAdapter(protocol340)
+		if err := writeActionBar(serverConn, adapter, &component.Text{Content: "legacy action"}); err != nil {
+			errCh <- err
+			return
+		}
+		if err := writeTitle(serverConn, adapter, limbgo.Title{
+			Title:    &component.Text{Content: "Legacy Title"},
+			Subtitle: &component.Text{Content: "Legacy Subtitle"},
+			Times:    limbgo.TitleTimesTicks(3, 30, 7),
+		}); err != nil {
+			errCh <- err
+			return
+		}
+		errCh <- writeClearTitle(serverConn, adapter, true)
+	}()
+
+	reader := bufio.NewReader(clientConn)
+	actionBar := assertPacketID(t, reader, protocol340, packetid.StatePlay, "title")
+	assertLegacyTitleTextPacket(t, actionBar.Data, 2)
+	times := assertPacketID(t, reader, protocol340, packetid.StatePlay, "title")
+	assertLegacyTitleTimesPacket(t, times.Data, 3, 3, 30, 7)
+	title := assertPacketID(t, reader, protocol340, packetid.StatePlay, "title")
+	assertLegacyTitleTextPacket(t, title.Data, 0)
+	subtitle := assertPacketID(t, reader, protocol340, packetid.StatePlay, "title")
+	assertLegacyTitleTextPacket(t, subtitle.Data, 1)
+	clear := assertPacketID(t, reader, protocol340, packetid.StatePlay, "title")
+	assertLegacyTitleActionOnly(t, clear.Data, 5)
+
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("legacy title write: %v", err)
+	}
+}
+
 func TestProtocol774DialogAPIAndClickEvent(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 
@@ -727,7 +828,7 @@ func TestProtocol774SessionControlAPI(t *testing.T) {
 	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "chat_message", message.Bytes())
 
 	caps := <-gotCapabilities
-	if !caps.StoreCookie || !caps.Transfer || !caps.Dialog || !caps.Disconnect || !caps.SystemMessage {
+	if !caps.StoreCookie || !caps.Transfer || !caps.Dialog || !caps.Disconnect || !caps.SystemMessage || !caps.ActionBar || !caps.Title {
 		t.Fatalf("capabilities = %+v", caps)
 	}
 	cookiePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "store_cookie")
@@ -750,7 +851,7 @@ func TestProtocol340SessionControlCapabilities(t *testing.T) {
 	if caps.StoreCookie || caps.Transfer || caps.Dialog {
 		t.Fatalf("legacy capabilities = %+v", caps)
 	}
-	if !caps.Disconnect || !caps.SystemMessage {
+	if !caps.Disconnect || !caps.SystemMessage || !caps.ActionBar || !caps.Title {
 		t.Fatalf("legacy capabilities missing baseline support: %+v", caps)
 	}
 	serverConn, clientConn := net.Pipe()
@@ -762,6 +863,20 @@ func TestProtocol340SessionControlCapabilities(t *testing.T) {
 	}
 	if err := session.Transfer(context.Background(), "velocity.internal", 25566); !errors.Is(err, limbgo.ErrUnsupportedCapability) {
 		t.Fatalf("transfer error = %v, want unsupported capability", err)
+	}
+}
+
+func TestProtocol47ActionBarUnsupported(t *testing.T) {
+	session := &playSession{adapter: newPlayAdapter(protocol47)}
+	caps := session.Capabilities()
+	if caps.ActionBar {
+		t.Fatalf("protocol 47 actionbar capability = true")
+	}
+	if !caps.Title {
+		t.Fatalf("protocol 47 title capability = false")
+	}
+	if err := session.SendActionBar(context.Background(), &component.Text{Content: "unsupported"}); !errors.Is(err, limbgo.ErrUnsupportedCapability) {
+		t.Fatalf("actionbar error = %v, want unsupported capability", err)
 	}
 }
 
@@ -868,6 +983,109 @@ func assertInlineDialogNBT(t *testing.T, data []byte) {
 	}
 	if reader.Len() != 0 {
 		t.Fatalf("dialog packet has %d trailing bytes", reader.Len())
+	}
+}
+
+func assertAnonymousNBTOnly(t *testing.T, data []byte) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	if err := skipAnonymousNBT(reader); err != nil {
+		t.Fatalf("skip anonymous nbt: %v", err)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("component packet has %d trailing bytes", reader.Len())
+	}
+}
+
+func assertTitleTimesPacket(t *testing.T, data []byte, wantFadeIn, wantStay, wantFadeOut int32) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	fadeIn, err := readInt32(reader)
+	if err != nil {
+		t.Fatalf("read fade in: %v", err)
+	}
+	stay, err := readInt32(reader)
+	if err != nil {
+		t.Fatalf("read stay: %v", err)
+	}
+	fadeOut, err := readInt32(reader)
+	if err != nil {
+		t.Fatalf("read fade out: %v", err)
+	}
+	if fadeIn != wantFadeIn || stay != wantStay || fadeOut != wantFadeOut {
+		t.Fatalf("title times = %d/%d/%d, want %d/%d/%d", fadeIn, stay, fadeOut, wantFadeIn, wantStay, wantFadeOut)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("title time packet has %d trailing bytes", reader.Len())
+	}
+}
+
+func assertClearTitlesPacket(t *testing.T, data []byte, wantReset bool) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	got, err := reader.ReadByte()
+	if err != nil {
+		t.Fatalf("read clear title reset: %v", err)
+	}
+	want := byte(0)
+	if wantReset {
+		want = 1
+	}
+	if got != want {
+		t.Fatalf("clear title reset = %d, want %d", got, want)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("clear title packet has %d trailing bytes", reader.Len())
+	}
+}
+
+func assertLegacyTitleTextPacket(t *testing.T, data []byte, wantAction int32) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	action, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read title action: %v", err)
+	}
+	if action != wantAction {
+		t.Fatalf("title action = %d, want %d", action, wantAction)
+	}
+	if _, err := wire.ReadString(reader, 32767); err != nil {
+		t.Fatalf("read title json: %v", err)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("legacy title text packet has %d trailing bytes", reader.Len())
+	}
+}
+
+func assertLegacyTitleTimesPacket(t *testing.T, data []byte, wantAction, wantFadeIn, wantStay, wantFadeOut int32) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	action, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read title action: %v", err)
+	}
+	if action != wantAction {
+		t.Fatalf("title action = %d, want %d", action, wantAction)
+	}
+	remaining := make([]byte, reader.Len())
+	if _, err := reader.Read(remaining); err != nil {
+		t.Fatalf("read title times: %v", err)
+	}
+	assertTitleTimesPacket(t, remaining, wantFadeIn, wantStay, wantFadeOut)
+}
+
+func assertLegacyTitleActionOnly(t *testing.T, data []byte, wantAction int32) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	action, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read title action: %v", err)
+	}
+	if action != wantAction {
+		t.Fatalf("title action = %d, want %d", action, wantAction)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("legacy title action packet has %d trailing bytes", reader.Len())
 	}
 }
 

@@ -183,8 +183,7 @@ func TestLoadFileConfigDimensionFields(t *testing.T) {
       "time": 18000,
       "world_age": 42,
       "ambient_light": 0.2,
-      "has_skylight": false,
-      "monster_spawn_light_level": 7
+      "has_skylight": false
     }
   }
 }`)
@@ -211,8 +210,5 @@ func TestLoadFileConfigDimensionFields(t *testing.T) {
 	}
 	if dimension.WorldAge != 42 {
 		t.Fatalf("world_age = %d, want 42", dimension.WorldAge)
-	}
-	if dimension.MonsterSpawn.LightLevel.Value == nil || *dimension.MonsterSpawn.LightLevel.Value != 7 {
-		t.Fatalf("monster spawn light level = %+v, want fixed 7", dimension.MonsterSpawn.LightLevel)
 	}
 }

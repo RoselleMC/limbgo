@@ -13,24 +13,25 @@ import (
 
 func dimensionTypeRegistry766(dimension limbgo.Dimension) registrydata.Registry {
 	dimension = limbgo.NormalizeDimension(dimension, 256)
+	profile := dimensionProtocolProfile(dimension.Environment)
 	var n nbtWriter
 	n.writeAnonymousCompound(func() {
 		if dimension.FixedTime != nil {
 			n.writeLong("fixed_time", *dimension.FixedTime)
 		}
-		n.writeByte("piglin_safe", boolByte(dimension.PiglinSafe))
+		n.writeByte("piglin_safe", boolByte(profile.piglinSafe))
 		n.writeByte("natural", boolByte(dimension.Natural))
 		n.writeFloat("ambient_light", dimension.AmbientLight)
-		n.writeInt("monster_spawn_block_light_limit", dimension.MonsterSpawn.BlockLightLimit)
-		n.writeString("infiniburn", dimension.Infiniburn)
-		n.writeByte("respawn_anchor_works", boolByte(dimension.RespawnAnchorWorks))
+		n.writeInt("monster_spawn_block_light_limit", profile.monsterSpawnBlockLightLimit)
+		n.writeString("infiniburn", profile.infiniburn)
+		n.writeByte("respawn_anchor_works", boolByte(profile.respawnAnchorWorks))
 		n.writeByte("has_skylight", boolByte(dimension.HasSkylight))
-		n.writeByte("bed_works", boolByte(dimension.BedWorks))
+		n.writeByte("bed_works", boolByte(profile.bedWorks))
 		n.writeString("effects", dimension.Effects)
-		n.writeByte("has_raids", boolByte(dimension.HasRaids))
+		n.writeByte("has_raids", boolByte(profile.hasRaids))
 		n.writeInt("logical_height", dimension.LogicalHeight)
 		n.writeDouble("coordinate_scale", dimension.CoordinateScale)
-		writeMonsterSpawnLightLevel(&n, dimension.MonsterSpawn.LightLevel)
+		writeMonsterSpawnLightLevel(&n, profile.monsterSpawnLightLevel)
 		n.writeInt("min_y", dimension.MinY)
 		n.writeByte("ultrawarm", boolByte(dimension.UltraWarm))
 		n.writeByte("has_ceiling", boolByte(dimension.HasCeiling))
@@ -45,18 +46,78 @@ func dimensionTypeRegistry766(dimension limbgo.Dimension) registrydata.Registry 
 	}
 }
 
-func writeMonsterSpawnLightLevel(n *nbtWriter, provider limbgo.IntProvider) {
-	if provider.Value != nil {
-		n.writeInt("monster_spawn_light_level", *provider.Value)
+type dimensionProtocolSettings struct {
+	piglinSafe                  bool
+	respawnAnchorWorks          bool
+	bedWorks                    bool
+	hasRaids                    bool
+	infiniburn                  string
+	monsterSpawnBlockLightLimit int32
+	monsterSpawnLightLevel      dimensionIntProvider
+}
+
+func dimensionProtocolProfile(environment limbgo.DimensionEnvironment) dimensionProtocolSettings {
+	switch environment {
+	case limbgo.DimensionNether:
+		return dimensionProtocolSettings{
+			piglinSafe:                  true,
+			respawnAnchorWorks:          true,
+			bedWorks:                    false,
+			hasRaids:                    false,
+			infiniburn:                  "#minecraft:infiniburn_nether",
+			monsterSpawnBlockLightLimit: 15,
+			monsterSpawnLightLevel:      fixedDimensionInt(7),
+		}
+	case limbgo.DimensionEnd:
+		return dimensionProtocolSettings{
+			piglinSafe:             false,
+			respawnAnchorWorks:     false,
+			bedWorks:               false,
+			hasRaids:               true,
+			infiniburn:             "#minecraft:infiniburn_end",
+			monsterSpawnLightLevel: uniformDimensionInt(0, 7),
+		}
+	default:
+		return dimensionProtocolSettings{
+			piglinSafe:             false,
+			respawnAnchorWorks:     false,
+			bedWorks:               true,
+			hasRaids:               true,
+			infiniburn:             "#minecraft:infiniburn_overworld",
+			monsterSpawnLightLevel: uniformDimensionInt(0, 7),
+		}
+	}
+}
+
+type dimensionIntProvider struct {
+	value        *int32
+	minInclusive *int32
+	maxInclusive *int32
+}
+
+func fixedDimensionInt(value int32) dimensionIntProvider {
+	return dimensionIntProvider{value: &value}
+}
+
+func uniformDimensionInt(minInclusive, maxInclusive int32) dimensionIntProvider {
+	return dimensionIntProvider{
+		minInclusive: &minInclusive,
+		maxInclusive: &maxInclusive,
+	}
+}
+
+func writeMonsterSpawnLightLevel(n *nbtWriter, provider dimensionIntProvider) {
+	if provider.value != nil {
+		n.writeInt("monster_spawn_light_level", *provider.value)
 		return
 	}
 	min := int32(0)
 	max := int32(7)
-	if provider.MinInclusive != nil {
-		min = *provider.MinInclusive
+	if provider.minInclusive != nil {
+		min = *provider.minInclusive
 	}
-	if provider.MaxInclusive != nil {
-		max = *provider.MaxInclusive
+	if provider.maxInclusive != nil {
+		max = *provider.maxInclusive
 	}
 	n.writeCompound("monster_spawn_light_level", func() {
 		n.writeInt("min_inclusive", min)

@@ -52,10 +52,16 @@ srv, err := limbgo.NewServer(limbgo.Config{
 
 `JoinTarget.World` is a full `World` object. The schematic is only one possible
 data source for that object; world time, dimension/environment, height, logical
-height, skylight, ambient light, coordinate scale, infiniburn/effects, and spawn
+height, skylight, ambient light, coordinate scale, visual effects, and spawn
 metadata travel with the world instance. If a resolver owns temporary per-player
 worlds, it may also implement `JoinReleaser` to clean them up when the
 connection closes.
+
+`Dimension` intentionally exposes only the subset that matters for a limbo
+login/chunk view. Modern clients still receive complete `dimension_type`
+registry data, but gameplay-only protocol fields such as bed behavior, raids,
+piglin safety, infiniburn, and monster spawn settings are derived internally
+from vanilla-like presets instead of being API or file-config inputs.
 
 For a zero-asset limbo world, use `DefaultWorld` and `DefaultSpawn`:
 
@@ -164,6 +170,9 @@ type PlayerSession interface {
 	Player() Player
 	Capabilities() SessionCapabilities
 	SendMessage(ctx context.Context, message component.Component) error
+	SendActionBar(ctx context.Context, message component.Component) error
+	ShowTitle(ctx context.Context, title Title) error
+	ClearTitle(ctx context.Context, reset bool) error
 	ShowDialog(ctx context.Context, dialog dialog.Dialog) error
 	ClearDialog(ctx context.Context) error
 	StoreCookie(ctx context.Context, key string, value []byte) error
@@ -173,6 +182,8 @@ type PlayerSession interface {
 
 type SessionCapabilities struct {
 	SystemMessage bool
+	ActionBar     bool
+	Title         bool
 	Dialog        bool
 	StoreCookie   bool
 	Transfer      bool
@@ -181,8 +192,9 @@ type SessionCapabilities struct {
 ```
 
 `Player()` returns the connected player metadata. `SendMessage` writes a system
-message. `ShowDialog` and `ClearDialog` are available for clients whose protocol
-contains the official dialog packets.
+message. `SendActionBar`, `ShowTitle`, and `ClearTitle` write the vanilla
+message overlay packets. `ShowDialog` and `ClearDialog` are available for
+clients whose protocol contains the official dialog packets.
 
 `Capabilities()` lets portal code branch on vanilla feature support without
 touching protocol numbers. If a session method is called when unsupported, it
@@ -223,8 +235,9 @@ import "go.minekube.com/common/minecraft/component"
 ```
 
 Any API field that takes `component.Component` supports rich text. That includes
-chat/system messages and dialog title, external title, body text, button labels,
-button tooltips, input labels, and option display labels.
+chat/system messages, actionbar messages, title/subtitle overlays, and dialog
+title, external title, body text, button labels, button tooltips, input labels,
+and option display labels.
 
 Protocol adapters serialize rich text as JSON for older clients and anonymous
 NBT for modern clients that require it.
@@ -237,6 +250,48 @@ message, err := limbgo.ParseMiniMessage("<red><bold>Hello</bold></red>")
 
 The parser is lenient: malformed or currently unrepresentable tags remain
 literal text instead of crashing the connection.
+
+## Actionbar And Titles
+
+Actionbar and title APIs use the same Minekube component model as chat and
+dialogs:
+
+```go
+events := limbgo.PlayerEventHandlerFuncs{
+	Command: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.CommandEvent) error {
+		if event.Command != "notice" {
+			return nil
+		}
+		action, err := limbgo.ParseMiniMessage("<green>Login accepted</green>")
+		if err != nil {
+			return err
+		}
+		title, err := limbgo.ParseMiniMessage("<gold><bold>Welcome</bold></gold>")
+		if err != nil {
+			return err
+		}
+		subtitle := &component.Text{Content: "Preparing transfer"}
+		if session.Capabilities().ActionBar {
+			if err := session.SendActionBar(ctx, action); err != nil {
+				return err
+			}
+		}
+		if session.Capabilities().Title {
+			return session.ShowTitle(ctx, limbgo.Title{
+				Title:    title,
+				Subtitle: subtitle,
+				Times:    limbgo.TitleTimesTicks(10, 40, 10),
+			})
+		}
+		return nil
+	},
+}
+```
+
+`ClearTitle(ctx, reset)` clears the current title. When `reset` is true, vanilla
+clients also reset title timings to their defaults. Protocol adapters send
+legacy title action packets for older clients and split actionbar/title packets
+for modern clients.
 
 ## Chat And Commands
 

@@ -56,30 +56,21 @@ type FileStatusRateLimitConfig struct {
 
 // DimensionConfig is the deployable JSON shape for world dimension settings.
 type DimensionConfig struct {
-	Environment            DimensionEnvironment `json:"environment"`
-	Name                   string               `json:"name"`
-	MinY                   *int32               `json:"min_y"`
-	Height                 *int32               `json:"height"`
-	LogicalHeight          *int32               `json:"logical_height"`
-	Natural                *bool                `json:"natural"`
-	HasSkylight            *bool                `json:"has_skylight"`
-	HasCeiling             *bool                `json:"has_ceiling"`
-	UltraWarm              *bool                `json:"ultrawarm"`
-	AmbientLight           *float32             `json:"ambient_light"`
-	FixedTime              *int64               `json:"fixed_time"`
-	TimeOfDay              *int64               `json:"time"`
-	WorldAge               *int64               `json:"world_age"`
-	CoordinateScale        *float64             `json:"coordinate_scale"`
-	RespawnAnchorWorks     *bool                `json:"respawn_anchor_works"`
-	BedWorks               *bool                `json:"bed_works"`
-	PiglinSafe             *bool                `json:"piglin_safe"`
-	HasRaids               *bool                `json:"has_raids"`
-	Infiniburn             string               `json:"infiniburn"`
-	Effects                string               `json:"effects"`
-	MonsterSpawnBlockLight *int32               `json:"monster_spawn_block_light_limit"`
-	MonsterSpawnLightLevel *int32               `json:"monster_spawn_light_level"`
-	MonsterSpawnLightMin   *int32               `json:"monster_spawn_light_min"`
-	MonsterSpawnLightMax   *int32               `json:"monster_spawn_light_max"`
+	Environment     DimensionEnvironment `json:"environment"`
+	Name            string               `json:"name"`
+	MinY            *int32               `json:"min_y"`
+	Height          *int32               `json:"height"`
+	LogicalHeight   *int32               `json:"logical_height"`
+	Natural         *bool                `json:"natural"`
+	HasSkylight     *bool                `json:"has_skylight"`
+	HasCeiling      *bool                `json:"has_ceiling"`
+	UltraWarm       *bool                `json:"ultrawarm"`
+	AmbientLight    *float32             `json:"ambient_light"`
+	FixedTime       *int64               `json:"fixed_time"`
+	TimeOfDay       *int64               `json:"time"`
+	WorldAge        *int64               `json:"world_age"`
+	CoordinateScale *float64             `json:"coordinate_scale"`
+	Effects         string               `json:"effects"`
 }
 
 // LoadFileConfig reads a JSON deployment config.
@@ -222,40 +213,8 @@ func (cfg DimensionConfig) Dimension(schematicHeight int32) Dimension {
 	if cfg.CoordinateScale != nil {
 		d.CoordinateScale = *cfg.CoordinateScale
 	}
-	if cfg.RespawnAnchorWorks != nil {
-		d.RespawnAnchorWorks = *cfg.RespawnAnchorWorks
-	}
-	if cfg.BedWorks != nil {
-		d.BedWorks = *cfg.BedWorks
-	}
-	if cfg.PiglinSafe != nil {
-		d.PiglinSafe = *cfg.PiglinSafe
-	}
-	if cfg.HasRaids != nil {
-		d.HasRaids = *cfg.HasRaids
-	}
-	if cfg.Infiniburn != "" {
-		d.Infiniburn = cfg.Infiniburn
-	}
 	if cfg.Effects != "" {
 		d.Effects = cfg.Effects
-	}
-	if cfg.MonsterSpawnBlockLight != nil {
-		d.MonsterSpawn.BlockLightLimit = *cfg.MonsterSpawnBlockLight
-	}
-	switch {
-	case cfg.MonsterSpawnLightLevel != nil:
-		d.MonsterSpawn.LightLevel = FixedInt(*cfg.MonsterSpawnLightLevel)
-	case cfg.MonsterSpawnLightMin != nil || cfg.MonsterSpawnLightMax != nil:
-		min := int32(0)
-		max := int32(7)
-		if cfg.MonsterSpawnLightMin != nil {
-			min = *cfg.MonsterSpawnLightMin
-		}
-		if cfg.MonsterSpawnLightMax != nil {
-			max = *cfg.MonsterSpawnLightMax
-		}
-		d.MonsterSpawn.LightLevel = UniformInt(min, max)
 	}
 	return NormalizeDimension(d, schematicHeight)
 }
@@ -276,14 +235,5 @@ func (cfg DimensionConfig) Empty() bool {
 		cfg.TimeOfDay == nil &&
 		cfg.WorldAge == nil &&
 		cfg.CoordinateScale == nil &&
-		cfg.RespawnAnchorWorks == nil &&
-		cfg.BedWorks == nil &&
-		cfg.PiglinSafe == nil &&
-		cfg.HasRaids == nil &&
-		cfg.Infiniburn == "" &&
-		cfg.Effects == "" &&
-		cfg.MonsterSpawnBlockLight == nil &&
-		cfg.MonsterSpawnLightLevel == nil &&
-		cfg.MonsterSpawnLightMin == nil &&
-		cfg.MonsterSpawnLightMax == nil
+		cfg.Effects == ""
 }

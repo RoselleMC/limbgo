@@ -355,7 +355,6 @@ func makeWorld() *limbgo.MemoryWorld {
       Natural: true,
       HasSkylight: true,
       CoordinateScale: 1,
-      BedWorks: true,
     },
     Palette: []limbgo.BlockState{
       {Name: "minecraft:air"},

@@ -12,6 +12,9 @@ type PlayerSession interface {
 	Player() Player
 	Capabilities() SessionCapabilities
 	SendMessage(ctx context.Context, message component.Component) error
+	SendActionBar(ctx context.Context, message component.Component) error
+	ShowTitle(ctx context.Context, title Title) error
+	ClearTitle(ctx context.Context, reset bool) error
 	ShowDialog(ctx context.Context, dialog dialog.Dialog) error
 	ClearDialog(ctx context.Context) error
 	StoreCookie(ctx context.Context, key string, value []byte) error
@@ -19,10 +22,32 @@ type PlayerSession interface {
 	Disconnect(ctx context.Context, reason component.Component) error
 }
 
+// Title is a client title overlay. Title and Subtitle may be nil when only
+// updating timings.
+type Title struct {
+	Title    component.Component
+	Subtitle component.Component
+	Times    *TitleTimes
+}
+
+// TitleTimes contains title animation timings in client ticks.
+type TitleTimes struct {
+	FadeInTicks  int32
+	StayTicks    int32
+	FadeOutTicks int32
+}
+
+// TitleTimesTicks returns a reusable TitleTimes pointer for API call sites.
+func TitleTimesTicks(fadeIn, stay, fadeOut int32) *TitleTimes {
+	return &TitleTimes{FadeInTicks: fadeIn, StayTicks: stay, FadeOutTicks: fadeOut}
+}
+
 // SessionCapabilities describes optional vanilla features available for the
 // connected player's protocol.
 type SessionCapabilities struct {
 	SystemMessage bool
+	ActionBar     bool
+	Title         bool
 	Dialog        bool
 	StoreCookie   bool
 	Transfer      bool

@@ -56,6 +56,24 @@ func (s *playSession) SendMessage(_ context.Context, message component.Component
 	return writeSystemMessage(s.conn, s.adapter, message)
 }
 
+func (s *playSession) SendActionBar(_ context.Context, message component.Component) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writeActionBar(s.conn, s.adapter, message)
+}
+
+func (s *playSession) ShowTitle(_ context.Context, title limbgo.Title) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writeTitle(s.conn, s.adapter, title)
+}
+
+func (s *playSession) ClearTitle(_ context.Context, reset bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writeClearTitle(s.conn, s.adapter, reset)
+}
+
 func (s *playSession) ShowDialog(_ context.Context, dialog dialog.Dialog) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -104,8 +122,18 @@ func sessionCapabilities(adapter playAdapter) limbgo.SessionCapabilities {
 	if !hasSystemMessage {
 		_, hasSystemMessage = packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "chat")
 	}
+	_, hasActionBar := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "action_bar")
+	if !hasActionBar && adapter.protocol >= protocol340 {
+		_, hasActionBar = packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "title")
+	}
+	_, hasTitle := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "set_title_text")
+	if !hasTitle {
+		_, hasTitle = packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "title")
+	}
 	return limbgo.SessionCapabilities{
 		SystemMessage: hasSystemMessage,
+		ActionBar:     hasActionBar,
+		Title:         hasTitle,
 		Dialog:        hasDialog,
 		StoreCookie:   hasStoreCookie,
 		Transfer:      hasTransfer,
@@ -302,6 +330,178 @@ func writeSystemMessageNBT(conn net.Conn, adapter playAdapter, message component
 		return err
 	}
 	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeActionBar(conn net.Conn, adapter playAdapter, message component.Component) error {
+	if _, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "action_bar"); ok {
+		return writeComponentPacket(conn, adapter, "action_bar", message)
+	}
+	if adapter.protocol >= protocol340 {
+		return writeLegacyTitleText(conn, adapter, 2, message)
+	}
+	return fmt.Errorf("%w: actionbar protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+}
+
+func writeTitle(conn net.Conn, adapter playAdapter, title limbgo.Title) error {
+	if title.Title == nil && title.Subtitle == nil && title.Times == nil {
+		return fmt.Errorf("%w: title requires text or timings", limbgo.ErrInvalidSessionControl)
+	}
+	if _, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "set_title_text"); ok {
+		if title.Times != nil {
+			if err := writeTitleTimesPacket(conn, adapter, "set_title_time", title.Times); err != nil {
+				return err
+			}
+		}
+		if title.Title != nil {
+			if err := writeComponentPacket(conn, adapter, "set_title_text", title.Title); err != nil {
+				return err
+			}
+		}
+		if title.Subtitle != nil {
+			if err := writeComponentPacket(conn, adapter, "set_title_subtitle", title.Subtitle); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+	if _, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "title"); !ok {
+		return fmt.Errorf("%w: title protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	if title.Times != nil {
+		action := int32(2)
+		if adapter.protocol >= protocol340 {
+			action = 3
+		}
+		if err := writeLegacyTitleTimes(conn, adapter, action, title.Times); err != nil {
+			return err
+		}
+	}
+	if title.Title != nil {
+		if err := writeLegacyTitleText(conn, adapter, 0, title.Title); err != nil {
+			return err
+		}
+	}
+	if title.Subtitle != nil {
+		if err := writeLegacyTitleText(conn, adapter, 1, title.Subtitle); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func writeClearTitle(conn net.Conn, adapter playAdapter, reset bool) error {
+	if id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "clear_titles"); ok {
+		var data bytes.Buffer
+		if err := wire.WriteBool(&data, reset); err != nil {
+			return err
+		}
+		return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+	}
+	if _, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "title"); !ok {
+		return fmt.Errorf("%w: clear title protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	action := int32(3)
+	if reset {
+		action = 4
+	}
+	if adapter.protocol >= protocol340 {
+		action = 4
+		if reset {
+			action = 5
+		}
+	}
+	var data bytes.Buffer
+	if err := wire.WriteVarInt(&data, action); err != nil {
+		return err
+	}
+	id, _ := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "title")
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeComponentPacket(conn net.Conn, adapter playAdapter, name string, message component.Component) error {
+	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, name)
+	if !ok {
+		return fmt.Errorf("%w: %s protocol %d", limbgo.ErrUnsupportedCapability, name, adapter.protocol)
+	}
+	var data bytes.Buffer
+	if err := writeComponentPayload(&data, adapter, message); err != nil {
+		return err
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeComponentPayload(data *bytes.Buffer, adapter playAdapter, message component.Component) error {
+	if message == nil {
+		message = &component.Text{}
+	}
+	raw, err := marshalComponentJSON(adapter.protocol, message)
+	if err != nil {
+		return err
+	}
+	if adapter.protocol >= protocol765 {
+		nbt, err := componentJSONToAnonymousNBT(raw)
+		if err != nil {
+			return err
+		}
+		_, err = data.Write(nbt)
+		return err
+	}
+	return wire.WriteString(data, string(raw))
+}
+
+func writeTitleTimesPacket(conn net.Conn, adapter playAdapter, name string, times *limbgo.TitleTimes) error {
+	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, name)
+	if !ok {
+		return fmt.Errorf("%w: %s protocol %d", limbgo.ErrUnsupportedCapability, name, adapter.protocol)
+	}
+	var data bytes.Buffer
+	if err := writeTitleTimesPayload(&data, times); err != nil {
+		return err
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeLegacyTitleText(conn net.Conn, adapter playAdapter, action int32, message component.Component) error {
+	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "title")
+	if !ok {
+		return fmt.Errorf("%w: title protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	var data bytes.Buffer
+	if err := wire.WriteVarInt(&data, action); err != nil {
+		return err
+	}
+	if err := writeComponentPayload(&data, adapter, message); err != nil {
+		return err
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeLegacyTitleTimes(conn net.Conn, adapter playAdapter, action int32, times *limbgo.TitleTimes) error {
+	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "title")
+	if !ok {
+		return fmt.Errorf("%w: title protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	var data bytes.Buffer
+	if err := wire.WriteVarInt(&data, action); err != nil {
+		return err
+	}
+	if err := writeTitleTimesPayload(&data, times); err != nil {
+		return err
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeTitleTimesPayload(data *bytes.Buffer, times *limbgo.TitleTimes) error {
+	if times == nil {
+		times = &limbgo.TitleTimes{}
+	}
+	if err := wire.WriteInt(data, times.FadeInTicks); err != nil {
+		return err
+	}
+	if err := wire.WriteInt(data, times.StayTicks); err != nil {
+		return err
+	}
+	return wire.WriteInt(data, times.FadeOutTicks)
 }
 
 func writeShowDialog(conn net.Conn, adapter playAdapter, value dialog.Dialog) error {
