@@ -80,6 +80,36 @@ func TestLoadFileConfigStatusDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadFileConfigAllowsMissingSchematic(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "limbgo.json")
+	raw := []byte(`{
+  "world": {
+    "id": "default"
+  }
+}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := LoadFileConfig(path)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	if cfg.World.Schematic != "" {
+		t.Fatalf("world.schematic = %q, want empty", cfg.World.Schematic)
+	}
+	if cfg.Spawn.World != "default" {
+		t.Fatalf("spawn.world = %q, want default", cfg.Spawn.World)
+	}
+	if cfg.Spawn.Pos != DefaultSpawn("default").Position {
+		t.Fatalf("spawn.pos = %+v", cfg.Spawn.Pos)
+	}
+	if cfg.Spawn.Mode != GameModeAdventure {
+		t.Fatalf("spawn.mode = %d, want adventure", cfg.Spawn.Mode)
+	}
+}
+
 func TestLoadFileConfigStatusMOTDFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "limbgo.json")

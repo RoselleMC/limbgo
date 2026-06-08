@@ -251,6 +251,60 @@ type BlockState struct {
 	Properties map[string]string
 }
 
+const (
+	DefaultWorldID  = "default"
+	DefaultBedrockY = int32(64)
+)
+
+// DefaultWorld returns a minimal one-block bedrock world for limbo deployments
+// that do not provide a schematic.
+func DefaultWorld(id string) *MemoryWorld {
+	return DefaultWorldWithDimension(id, Dimension{})
+}
+
+// DefaultWorldWithDimension returns the built-in one-block bedrock world using
+// the provided dimension settings.
+func DefaultWorldWithDimension(id string, dimension Dimension) *MemoryWorld {
+	if id == "" {
+		id = DefaultWorldID
+	}
+	dimension = NormalizeDimension(dimension, 256)
+	blocks := make([]uint32, 16*16*16)
+	blocks[0] = 1
+	sectionY := DefaultBedrockY / 16
+	return &MemoryWorld{
+		WorldID:        id,
+		WorldDimension: dimension,
+		Palette: []BlockState{
+			{Name: "minecraft:air"},
+			{Name: "minecraft:bedrock"},
+		},
+		Chunks: map[ChunkPos]Chunk{
+			{X: 0, Z: 0}: {
+				X:    0,
+				Z:    0,
+				MinY: dimension.MinY,
+				Sections: []ChunkSection{
+					{Y: sectionY, BlockStateIDs: blocks},
+				},
+			},
+		},
+	}
+}
+
+// DefaultSpawn returns the spawn target that stands on the built-in bedrock
+// block.
+func DefaultSpawn(worldID string) SpawnTarget {
+	if worldID == "" {
+		worldID = DefaultWorldID
+	}
+	return SpawnTarget{
+		World:    worldID,
+		Position: Vec3{X: 0, Y: float64(DefaultBedrockY + 1), Z: 0},
+		GameMode: GameModeAdventure,
+	}
+}
+
 // MemoryWorld is a small immutable World implementation useful for embedded API users.
 type MemoryWorld struct {
 	WorldID        string

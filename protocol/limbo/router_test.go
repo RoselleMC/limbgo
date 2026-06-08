@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
+	"errors"
 	"net"
 	"strings"
 	"testing"
@@ -682,6 +683,157 @@ func TestProtocol47StatusStillWorks(t *testing.T) {
 
 	if err := <-errCh; err != nil {
 		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol774SessionControlAPI(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	gotCapabilities := make(chan limbgo.SessionCapabilities, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
+				gotCapabilities <- session.Capabilities()
+				if err := session.StoreCookie(ctx, "authman:transfer", []byte("grant-token")); err != nil {
+					return err
+				}
+				if err := session.Transfer(ctx, "velocity.internal", 25566); err != nil {
+					return err
+				}
+				return session.Disconnect(ctx, &component.Text{Content: "done"})
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	completeModernJoin(t, clientConn, reader, protocol774, protocol774)
+
+	var message bytes.Buffer
+	if err := wire.WriteString(&message, "auth ok"); err != nil {
+		t.Fatalf("write chat message: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "chat_message", message.Bytes())
+
+	caps := <-gotCapabilities
+	if !caps.StoreCookie || !caps.Transfer || !caps.Dialog || !caps.Disconnect || !caps.SystemMessage {
+		t.Fatalf("capabilities = %+v", caps)
+	}
+	cookiePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "store_cookie")
+	assertStoreCookiePacket(t, cookiePacket.Data, "authman:transfer", []byte("grant-token"))
+	transferPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "transfer")
+	assertTransferPacket(t, transferPacket.Data, "velocity.internal", 25566)
+	disconnectPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "kick_disconnect")
+	if err := skipAnonymousNBT(bytes.NewReader(disconnectPacket.Data)); err != nil {
+		t.Fatalf("disconnect reason nbt: %v", err)
+	}
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol340SessionControlCapabilities(t *testing.T) {
+	session := &playSession{adapter: newPlayAdapter(protocol340)}
+	caps := session.Capabilities()
+	if caps.StoreCookie || caps.Transfer || caps.Dialog {
+		t.Fatalf("legacy capabilities = %+v", caps)
+	}
+	if !caps.Disconnect || !caps.SystemMessage {
+		t.Fatalf("legacy capabilities missing baseline support: %+v", caps)
+	}
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+	session.conn = serverConn
+	if err := session.StoreCookie(context.Background(), "authman:transfer", []byte("grant")); !errors.Is(err, limbgo.ErrUnsupportedCapability) {
+		t.Fatalf("store cookie error = %v, want unsupported capability", err)
+	}
+	if err := session.Transfer(context.Background(), "velocity.internal", 25566); !errors.Is(err, limbgo.ErrUnsupportedCapability) {
+		t.Fatalf("transfer error = %v, want unsupported capability", err)
+	}
+}
+
+func completeModernJoin(t *testing.T, conn net.Conn, reader *bufio.Reader, protocol int32, packetProtocol int32) {
+	t.Helper()
+	assertPacketID(t, reader, packetProtocol, packetid.StateLogin, "success")
+	writeServerboundNamedPacket(t, conn, packetProtocol, packetid.StateLogin, "login_acknowledged", nil)
+	registryPacketCount := 4
+	if protocol < protocol766 {
+		registryPacketCount = 1
+	}
+	for i := 0; i < registryPacketCount; i++ {
+		assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "tags")
+	assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, conn, packetProtocol, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "login")
+	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "position")
+	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "chunk_batch_finished")
+}
+
+func assertStoreCookiePacket(t *testing.T, data []byte, wantKey string, wantValue []byte) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	key, err := wire.ReadString(reader, 32767)
+	if err != nil {
+		t.Fatalf("read cookie key: %v", err)
+	}
+	if key != wantKey {
+		t.Fatalf("cookie key = %q, want %q", key, wantKey)
+	}
+	length, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read cookie value length: %v", err)
+	}
+	if length < 0 {
+		t.Fatalf("cookie value length = %d", length)
+	}
+	value := make([]byte, int(length))
+	if _, err := reader.Read(value); err != nil {
+		t.Fatalf("read cookie value: %v", err)
+	}
+	if !bytes.Equal(value, wantValue) {
+		t.Fatalf("cookie value = %q, want %q", value, wantValue)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("store_cookie has %d trailing bytes", reader.Len())
+	}
+}
+
+func assertTransferPacket(t *testing.T, data []byte, wantHost string, wantPort int32) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	host, err := wire.ReadString(reader, 32767)
+	if err != nil {
+		t.Fatalf("read transfer host: %v", err)
+	}
+	if host != wantHost {
+		t.Fatalf("transfer host = %q, want %q", host, wantHost)
+	}
+	port, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read transfer port: %v", err)
+	}
+	if port != wantPort {
+		t.Fatalf("transfer port = %d, want %d", port, wantPort)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("transfer has %d trailing bytes", reader.Len())
 	}
 }
 

@@ -26,11 +26,7 @@ func main() {
 		fatal(err)
 	}
 
-	schematicOptions := schematic.Options{WorldID: fileCfg.World.ID}
-	if !fileCfg.World.Dimension.Empty() {
-		schematicOptions.Dimension = fileCfg.Dimension(0)
-	}
-	world, err := schematic.LoadFile(fileCfg.World.Schematic, schematicOptions)
+	world, err := loadWorld(fileCfg)
 	if err != nil {
 		fatal(err)
 	}
@@ -103,4 +99,19 @@ func main() {
 func fatal(err error) {
 	_, _ = fmt.Fprintf(os.Stderr, "limbgo: %v\n", err)
 	os.Exit(1)
+}
+
+func loadWorld(fileCfg limbgo.FileConfig) (limbgo.World, error) {
+	if fileCfg.World.Schematic == "" {
+		var dimension limbgo.Dimension
+		if !fileCfg.World.Dimension.Empty() {
+			dimension = fileCfg.Dimension(256)
+		}
+		return limbgo.DefaultWorldWithDimension(fileCfg.World.ID, dimension), nil
+	}
+	schematicOptions := schematic.Options{WorldID: fileCfg.World.ID}
+	if !fileCfg.World.Dimension.Empty() {
+		schematicOptions.Dimension = fileCfg.Dimension(0)
+	}
+	return schematic.LoadFile(fileCfg.World.Schematic, schematicOptions)
 }

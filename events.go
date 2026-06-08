@@ -10,9 +10,23 @@ import (
 // PlayerSession is the API exposed to event handlers for the connected player.
 type PlayerSession interface {
 	Player() Player
+	Capabilities() SessionCapabilities
 	SendMessage(ctx context.Context, message component.Component) error
 	ShowDialog(ctx context.Context, dialog dialog.Dialog) error
 	ClearDialog(ctx context.Context) error
+	StoreCookie(ctx context.Context, key string, value []byte) error
+	Transfer(ctx context.Context, host string, port int) error
+	Disconnect(ctx context.Context, reason component.Component) error
+}
+
+// SessionCapabilities describes optional vanilla features available for the
+// connected player's protocol.
+type SessionCapabilities struct {
+	SystemMessage bool
+	Dialog        bool
+	StoreCookie   bool
+	Transfer      bool
+	Disconnect    bool
 }
 
 // PlayerEventHandler receives optional player actions after the limbo join

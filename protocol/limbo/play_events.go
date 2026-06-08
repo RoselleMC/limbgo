@@ -11,6 +11,7 @@ import (
 	"math"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/RoselleMC/limbgo"
 	"github.com/RoselleMC/limbgo/dialog"
@@ -37,22 +38,79 @@ type playSession struct {
 	conn    net.Conn
 	player  limbgo.Player
 	adapter playAdapter
+	mu      sync.Mutex
+	closed  bool
 }
 
 func (s *playSession) Player() limbgo.Player {
 	return s.player
 }
 
+func (s *playSession) Capabilities() limbgo.SessionCapabilities {
+	return sessionCapabilities(s.adapter)
+}
+
 func (s *playSession) SendMessage(_ context.Context, message component.Component) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return writeSystemMessage(s.conn, s.adapter, message)
 }
 
 func (s *playSession) ShowDialog(_ context.Context, dialog dialog.Dialog) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return writeShowDialog(s.conn, s.adapter, dialog)
 }
 
 func (s *playSession) ClearDialog(_ context.Context) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return writeClearDialog(s.conn, s.adapter)
+}
+
+func (s *playSession) StoreCookie(_ context.Context, key string, value []byte) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writeStoreCookie(s.conn, s.adapter, key, value)
+}
+
+func (s *playSession) Transfer(_ context.Context, host string, port int) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return writeTransfer(s.conn, s.adapter, host, port)
+}
+
+func (s *playSession) Disconnect(_ context.Context, reason component.Component) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	err := writeKickDisconnect(s.conn, s.adapter, reason)
+	s.closed = true
+	_ = s.conn.Close()
+	return err
+}
+
+func (s *playSession) Closed() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.closed
+}
+
+func sessionCapabilities(adapter playAdapter) limbgo.SessionCapabilities {
+	_, hasDialog := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "show_dialog")
+	_, hasStoreCookie := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "store_cookie")
+	_, hasTransfer := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "transfer")
+	_, hasDisconnect := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "kick_disconnect")
+	_, hasSystemMessage := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "system_chat")
+	if !hasSystemMessage {
+		_, hasSystemMessage = packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "chat")
+	}
+	return limbgo.SessionCapabilities{
+		SystemMessage: hasSystemMessage,
+		Dialog:        hasDialog,
+		StoreCookie:   hasStoreCookie,
+		Transfer:      hasTransfer,
+		Disconnect:    hasDisconnect,
+	}
 }
 
 func servePlayEvents(ctx context.Context, conn net.Conn, reader *bufio.Reader, services limbgo.SessionServices, player limbgo.Player, adapter playAdapter) error {
@@ -67,7 +125,7 @@ func servePlayEvents(ctx context.Context, conn net.Conn, reader *bufio.Reader, s
 		}
 		packet, err := wire.ReadPacket(reader, 0)
 		if err != nil {
-			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+			if isClosedPlayConnError(err) {
 				return nil
 			}
 			return err
@@ -75,7 +133,14 @@ func servePlayEvents(ctx context.Context, conn net.Conn, reader *bufio.Reader, s
 		if err := handlePlayPacket(ctx, handler, session, packet); err != nil {
 			return err
 		}
+		if session.Closed() {
+			return nil
+		}
 	}
+}
+
+func isClosedPlayConnError(err error) bool {
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe) || errors.Is(err, net.ErrClosed)
 }
 
 func handlePlayPacket(ctx context.Context, handler limbgo.PlayerEventHandler, session *playSession, packet wire.Packet) error {
@@ -271,6 +336,75 @@ func writeClearDialog(conn net.Conn, adapter playAdapter) error {
 		return fmt.Errorf("clear_dialog is not available for protocol %d", adapter.protocol)
 	}
 	return wire.WritePacket(conn, wire.Packet{ID: id})
+}
+
+func writeStoreCookie(conn net.Conn, adapter playAdapter, key string, value []byte) error {
+	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "store_cookie")
+	if !ok {
+		return fmt.Errorf("%w: store_cookie protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	if key == "" {
+		return fmt.Errorf("%w: cookie key is required", limbgo.ErrInvalidSessionControl)
+	}
+	var data bytes.Buffer
+	if err := wire.WriteString(&data, key); err != nil {
+		return err
+	}
+	if err := wire.WriteVarInt(&data, int32(len(value))); err != nil {
+		return err
+	}
+	if _, err := data.Write(value); err != nil {
+		return err
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeTransfer(conn net.Conn, adapter playAdapter, host string, port int) error {
+	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "transfer")
+	if !ok {
+		return fmt.Errorf("%w: transfer protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	if host == "" {
+		return fmt.Errorf("%w: transfer host is required", limbgo.ErrInvalidSessionControl)
+	}
+	if port <= 0 || port > 65535 {
+		return fmt.Errorf("%w: transfer port %d outside 1-65535", limbgo.ErrInvalidSessionControl, port)
+	}
+	var data bytes.Buffer
+	if err := wire.WriteString(&data, host); err != nil {
+		return err
+	}
+	if err := wire.WriteVarInt(&data, int32(port)); err != nil {
+		return err
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeKickDisconnect(conn net.Conn, adapter playAdapter, reason component.Component) error {
+	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "kick_disconnect")
+	if !ok {
+		return fmt.Errorf("%w: disconnect protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	if reason == nil {
+		reason = &component.Text{}
+	}
+	raw, err := marshalComponentJSON(adapter.protocol, reason)
+	if err != nil {
+		return err
+	}
+	var data bytes.Buffer
+	if adapter.protocol >= protocol765 {
+		nbt, err := componentJSONToAnonymousNBT(raw)
+		if err != nil {
+			return err
+		}
+		if _, err := data.Write(nbt); err != nil {
+			return err
+		}
+	} else if err := wire.WriteString(&data, string(raw)); err != nil {
+		return err
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
 }
 
 func marshalComponentJSON(protocol int32, message component.Component) ([]byte, error) {

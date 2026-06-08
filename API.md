@@ -57,6 +57,26 @@ metadata travel with the world instance. If a resolver owns temporary per-player
 worlds, it may also implement `JoinReleaser` to clean them up when the
 connection closes.
 
+For a zero-asset limbo world, use `DefaultWorld` and `DefaultSpawn`:
+
+```go
+spawn := limbgo.DefaultSpawn("default")
+world := limbgo.DefaultWorld("default")
+```
+
+The default world is air plus one `minecraft:bedrock` block directly below the
+spawn position. The standalone binary uses this same world when
+`world.schematic` is omitted. If both `world.schematic` and `spawn.pos` are
+omitted in the file config, `spawn.pos` defaults to `{X: 0, Y: 65, Z: 0}` and
+the bedrock block is placed at `0,64,0`.
+
+Use `DefaultWorldWithDimension` when you want the same no-schematic world but
+with custom dimension properties:
+
+```go
+world := limbgo.DefaultWorldWithDimension("nether-login", limbgo.DimensionPreset(limbgo.DimensionNether, 256))
+```
+
 ## Status And MOTD
 
 For static server-list data, set fields directly on `limbo.Router`:
@@ -142,15 +162,56 @@ Event handlers receive a `PlayerSession`:
 ```go
 type PlayerSession interface {
 	Player() Player
+	Capabilities() SessionCapabilities
 	SendMessage(ctx context.Context, message component.Component) error
 	ShowDialog(ctx context.Context, dialog dialog.Dialog) error
 	ClearDialog(ctx context.Context) error
+	StoreCookie(ctx context.Context, key string, value []byte) error
+	Transfer(ctx context.Context, host string, port int) error
+	Disconnect(ctx context.Context, reason component.Component) error
+}
+
+type SessionCapabilities struct {
+	SystemMessage bool
+	Dialog        bool
+	StoreCookie   bool
+	Transfer      bool
+	Disconnect    bool
 }
 ```
 
 `Player()` returns the connected player metadata. `SendMessage` writes a system
 message. `ShowDialog` and `ClearDialog` are available for clients whose protocol
 contains the official dialog packets.
+
+`Capabilities()` lets portal code branch on vanilla feature support without
+touching protocol numbers. If a session method is called when unsupported, it
+returns `ErrUnsupportedCapability`.
+
+Auth portals can complete a vanilla transfer flow without protocol-specific
+code:
+
+```go
+events := limbgo.PlayerEventHandlerFuncs{
+	Command: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.CommandEvent) error {
+		if event.Command != "login-ok" {
+			return nil
+		}
+		caps := session.Capabilities()
+		if !caps.StoreCookie || !caps.Transfer {
+			return session.Disconnect(ctx, &component.Text{Content: "Please use Minecraft 1.20.5+"})
+		}
+		if err := session.StoreCookie(ctx, "authman:transfer", grantToken); err != nil {
+			return err
+		}
+		return session.Transfer(ctx, "play.example.net", 25565)
+	},
+}
+```
+
+`StoreCookie` writes a vanilla store-cookie packet, `Transfer` writes the
+vanilla transfer packet, and `Disconnect` writes a rich-text kick reason before
+closing the connection.
 
 ## Rich Text
 

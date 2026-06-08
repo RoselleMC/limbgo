@@ -2,16 +2,16 @@
 
 `limbgo` is a Go-first Minecraft Java Edition limbo server project. The target
 surface is intentionally tiny: accept players, place them in a precomputed
-schematic-backed world, send enough chunk data for the client to render, and keep
-the connection alive.
+schematic-backed or default bedrock world, send enough chunk data for the client
+to render, and keep the connection alive.
 
 The project is designed for two runtime shapes:
 
 - an embeddable Go API for projects that want to decide each player's world and
   spawn position dynamically;
 - a standalone binary with a small JSON config containing the listen address,
-  status text, spawn position, schematic file, and optional generated protocol
-  data overrides.
+  status text, spawn position, optional schematic file, and optional generated
+  protocol data overrides.
 
 ## Compatibility Strategy
 
@@ -143,9 +143,13 @@ The `protocol` paths are optional. When omitted, the binary uses the embedded
 generated defaults. Supplying them is useful when testing a new protocol line or
 regenerated registry data without changing Go source.
 
-`world/schematic` loads Sponge `.schem` files into a version-neutral world
-palette. Protocol adapters translate that palette to client-specific block state
-IDs at chunk serialization time.
+`world.schematic` is optional. When it is set, `world/schematic` loads the
+Sponge `.schem` file into a version-neutral world palette. Protocol adapters
+translate that palette to client-specific block state IDs at chunk serialization
+time. When it is omitted, the standalone binary uses `DefaultWorld`: a
+minimal air world with one `minecraft:bedrock` block directly below the spawn
+position. If the config also omits `spawn.pos`, the default spawn is
+`{ "x": 0, "y": 65, "z": 0 }`, so the bedrock block is at `0,64,0`.
 
 The `world.dimension` block is optional. `environment` accepts `overworld`,
 `nether`, or `end` and fills vanilla-like defaults for limbo-relevant client

@@ -2,7 +2,6 @@ package limbgo
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"time"
 
@@ -108,8 +107,12 @@ func LoadFileConfig(path string) (FileConfig, error) {
 	if cfg.Spawn.World == "" {
 		cfg.Spawn.World = cfg.World.ID
 	}
-	if cfg.World.Schematic == "" {
-		return FileConfig{}, fmt.Errorf("limbgo: world.schematic is required")
+	if cfg.World.Schematic == "" && cfg.Spawn.Pos == (Vec3{}) && cfg.Spawn.Look == (Rotation{}) && cfg.Spawn.Mode == 0 {
+		spawn := DefaultSpawn(cfg.World.ID)
+		cfg.Spawn.World = spawn.World
+		cfg.Spawn.Pos = spawn.Position
+		cfg.Spawn.Look = spawn.Rotation
+		cfg.Spawn.Mode = spawn.GameMode
 	}
 	return cfg, nil
 }

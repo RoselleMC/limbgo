@@ -7,6 +7,8 @@ var (
 	ErrMissingWorldProvider  = errors.New("limbgo: missing world provider")
 	ErrMissingSpawnResolver  = errors.New("limbgo: missing spawn resolver")
 	ErrMissingWorld          = errors.New("limbgo: missing world")
+	ErrUnsupportedCapability = errors.New("limbgo: unsupported session capability")
+	ErrInvalidSessionControl = errors.New("limbgo: invalid session control")
 	ErrWorldNotFound         = errors.New("limbgo: world not found")
 	ErrInvalidSchematic      = errors.New("limbgo: invalid schematic")
 )
