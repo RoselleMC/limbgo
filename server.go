@@ -13,6 +13,7 @@ import (
 type Config struct {
 	Addr           string
 	ProtocolRouter ProtocolRouter
+	JoinResolver   JoinResolver
 	Worlds         WorldProvider
 	SpawnResolver  SpawnResolver
 	Events         PlayerEventHandler
@@ -26,8 +27,14 @@ type Server struct {
 	mu       sync.Mutex
 	listener net.Listener
 	conns    map[net.Conn]struct{}
+	joins    map[string]activeJoin
 	wg       sync.WaitGroup
 	closed   bool
+}
+
+type activeJoin struct {
+	player Player
+	target JoinTarget
 }
 
 // NewServer validates config and creates a server.
@@ -38,10 +45,10 @@ func NewServer(cfg Config) (*Server, error) {
 	if cfg.ProtocolRouter == nil {
 		return nil, ErrMissingProtocolRouter
 	}
-	if cfg.Worlds == nil {
+	if cfg.JoinResolver == nil && cfg.Worlds == nil {
 		return nil, ErrMissingWorldProvider
 	}
-	if cfg.SpawnResolver == nil {
+	if cfg.JoinResolver == nil && cfg.SpawnResolver == nil {
 		return nil, ErrMissingSpawnResolver
 	}
 	if cfg.Logger == nil {
@@ -51,6 +58,7 @@ func NewServer(cfg Config) (*Server, error) {
 	return &Server{
 		cfg:   cfg,
 		conns: make(map[net.Conn]struct{}),
+		joins: make(map[string]activeJoin),
 	}, nil
 }
 
@@ -139,12 +147,48 @@ func (s *Server) Shutdown(ctx context.Context) error {
 
 // ResolveSpawn implements SessionServices.
 func (s *Server) ResolveSpawn(ctx context.Context, player Player) (SpawnTarget, error) {
+	if s.cfg.JoinResolver != nil {
+		target, err := s.ResolveJoin(ctx, player)
+		if err != nil {
+			return SpawnTarget{}, err
+		}
+		return target.Spawn, nil
+	}
 	return s.cfg.SpawnResolver.ResolveSpawn(ctx, player)
 }
 
 // World implements SessionServices.
 func (s *Server) World(ctx context.Context, id string) (World, error) {
 	return s.cfg.Worlds.World(ctx, id)
+}
+
+// ResolveJoin resolves the exact world instance and spawn for a player.
+func (s *Server) ResolveJoin(ctx context.Context, player Player) (JoinTarget, error) {
+	if s.cfg.JoinResolver == nil {
+		spawn, err := s.cfg.SpawnResolver.ResolveSpawn(ctx, player)
+		if err != nil {
+			return JoinTarget{}, err
+		}
+		world, err := s.cfg.Worlds.World(ctx, spawn.World)
+		if err != nil {
+			return JoinTarget{}, err
+		}
+		return normalizeJoinTarget(JoinTarget{World: world, Spawn: spawn})
+	}
+	target, err := s.cfg.JoinResolver.ResolveJoin(ctx, player)
+	if err != nil {
+		return JoinTarget{}, err
+	}
+	target, err = normalizeJoinTarget(target)
+	if err != nil {
+		return JoinTarget{}, err
+	}
+	if _, ok := s.cfg.JoinResolver.(JoinReleaser); ok {
+		s.mu.Lock()
+		s.joins[remoteAddrKey(player.RemoteAddr)] = activeJoin{player: player, target: target}
+		s.mu.Unlock()
+	}
+	return target, nil
 }
 
 // Events implements SessionServices.
@@ -164,9 +208,47 @@ func (s *Server) trackConn(conn net.Conn) {
 
 func (s *Server) untrackConn(conn net.Conn) {
 	_ = conn.Close()
+	s.releaseJoin(conn.RemoteAddr())
 	s.mu.Lock()
 	delete(s.conns, conn)
 	s.mu.Unlock()
+}
+
+func (s *Server) releaseJoin(remote net.Addr) {
+	releaser, ok := s.cfg.JoinResolver.(JoinReleaser)
+	if !ok {
+		return
+	}
+	key := remoteAddrKey(remote)
+	s.mu.Lock()
+	join, ok := s.joins[key]
+	if ok {
+		delete(s.joins, key)
+	}
+	s.mu.Unlock()
+	if !ok {
+		return
+	}
+	if err := releaser.ReleaseJoin(context.Background(), join.player, join.target); err != nil {
+		s.cfg.Logger.Debug("release join", "remote", key, "player", join.player.Name, "error", err)
+	}
+}
+
+func normalizeJoinTarget(target JoinTarget) (JoinTarget, error) {
+	if target.World == nil {
+		return JoinTarget{}, ErrMissingWorld
+	}
+	if target.Spawn.World == "" {
+		target.Spawn.World = target.World.ID()
+	}
+	return target, nil
+}
+
+func remoteAddrKey(remote net.Addr) string {
+	if remote == nil {
+		return ""
+	}
+	return remote.String()
 }
 
 // ShutdownTimeout is a convenience wrapper around Shutdown.

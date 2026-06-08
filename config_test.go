@@ -80,6 +80,67 @@ func TestLoadFileConfigStatusDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadFileConfigStatusMOTDFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "limbgo.json")
+	raw := []byte(`{
+  "status": {
+    "motd_minimessage": "<gold>limbgo</gold>",
+    "version_name": "limbgo status",
+    "version_protocol": 771,
+    "max_players": 100,
+    "online_players": 3,
+    "sample_players": [{"name": "Score2", "id": "00000000-0000-0000-0000-000000000002"}],
+    "hide_players": true,
+    "favicon": "data:image/png;base64,AAAA",
+    "enforces_secure_chat": true,
+    "previews_chat": false,
+    "prevents_chat_reports": true,
+    "rate_limit": {
+      "requests": 12,
+      "window_millis": 500
+    }
+  },
+  "world": {
+    "schematic": "spawn.schem"
+  }
+}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := LoadFileConfig(path)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	component, err := cfg.Status.Component()
+	if err != nil {
+		t.Fatalf("status component: %v", err)
+	}
+	options := cfg.Status.Options(component)
+	if options.VersionName != "limbgo status" {
+		t.Fatalf("version name = %q", options.VersionName)
+	}
+	if options.Protocol != 771 {
+		t.Fatalf("version protocol = %d", options.Protocol)
+	}
+	if !options.HidePlayers {
+		t.Fatalf("hide players = false")
+	}
+	if options.EnforcesSecureChat == nil || !*options.EnforcesSecureChat {
+		t.Fatalf("enforces secure chat = %v", options.EnforcesSecureChat)
+	}
+	if options.PreviewsChat == nil || *options.PreviewsChat {
+		t.Fatalf("previews chat = %v", options.PreviewsChat)
+	}
+	if options.PreventsChatReports == nil || !*options.PreventsChatReports {
+		t.Fatalf("prevents chat reports = %v", options.PreventsChatReports)
+	}
+	if limiter := cfg.Status.RateLimit.RateLimiter(); limiter == nil {
+		t.Fatalf("rate limiter = nil")
+	}
+}
+
 func TestLoadFileConfigDimensionFields(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "limbgo.json")

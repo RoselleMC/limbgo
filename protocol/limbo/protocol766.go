@@ -34,14 +34,12 @@ const protocol774 = int32(774)
 const protocol775 = int32(775)
 
 func serveModernPreConfigurationProtocol(ctx context.Context, conn net.Conn, services limbgo.SessionServices, player limbgo.Player, cfg modernProtocolConfig, registryData *registrydata.Data) error {
-	spawn, err := services.ResolveSpawn(ctx, player)
+	join, err := resolveJoin(ctx, services, player)
 	if err != nil {
 		return err
 	}
-	world, err := services.World(ctx, spawn.World)
-	if err != nil {
-		return err
-	}
+	spawn := join.Spawn
+	world := join.World
 	if err := writeLoginSuccessModern(conn, player, cfg); err != nil {
 		return err
 	}
@@ -100,14 +98,12 @@ func (cfg modernProtocolConfig) dataProtocolID() int32 {
 }
 
 func serveModernProtocol(ctx context.Context, conn net.Conn, reader *bufio.Reader, services limbgo.SessionServices, player limbgo.Player, cfg modernProtocolConfig, registryData *registrydata.Data) error {
-	spawn, err := services.ResolveSpawn(ctx, player)
+	join, err := resolveJoin(ctx, services, player)
 	if err != nil {
 		return err
 	}
-	world, err := services.World(ctx, spawn.World)
-	if err != nil {
-		return err
-	}
+	spawn := join.Spawn
+	world := join.World
 
 	if err := writeLoginSuccessModern(conn, player, cfg); err != nil {
 		return err

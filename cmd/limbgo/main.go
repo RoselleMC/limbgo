@@ -34,10 +34,25 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
+	motd, err := fileCfg.Status.Component()
+	if err != nil {
+		fatal(err)
+	}
 
 	router := limbo.Router{
-		Description: fileCfg.Status.Description,
-		MaxPlayers:  fileCfg.Status.MaxPlayers,
+		Description:         fileCfg.Status.Description,
+		MOTD:                motd,
+		StatusRateLimiter:   fileCfg.Status.RateLimit.RateLimiter(),
+		VersionName:         fileCfg.Status.VersionName,
+		VersionProtocol:     fileCfg.Status.VersionProtocol,
+		MaxPlayers:          fileCfg.Status.MaxPlayers,
+		OnlinePlayers:       fileCfg.Status.OnlinePlayers,
+		SamplePlayers:       fileCfg.Status.SamplePlayers,
+		HidePlayers:         fileCfg.Status.HidePlayers,
+		Favicon:             fileCfg.Status.Favicon,
+		EnforcesSecureChat:  fileCfg.Status.EnforcesSecureChat,
+		PreviewsChat:        fileCfg.Status.PreviewsChat,
+		PreventsChatReports: fileCfg.Status.PreventsChatReports,
 	}
 	if fileCfg.Protocol.ModernProtocols != "" {
 		router.ModernProtocols, err = limbo.LoadModernProtocolsFile(fileCfg.Protocol.ModernProtocols)

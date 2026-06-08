@@ -16,14 +16,12 @@ import (
 const protocol47 = int32(47)
 
 func serveProtocol47(ctx context.Context, conn net.Conn, services limbgo.SessionServices, player limbgo.Player) error {
-	spawn, err := services.ResolveSpawn(ctx, player)
+	join, err := resolveJoin(ctx, services, player)
 	if err != nil {
 		return err
 	}
-	world, err := services.World(ctx, spawn.World)
-	if err != nil {
-		return err
-	}
+	spawn := join.Spawn
+	world := join.World
 
 	if err := writeLoginSuccess(protocol47, conn, player); err != nil {
 		return err

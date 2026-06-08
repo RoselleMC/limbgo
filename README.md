@@ -75,8 +75,7 @@ node tools/js-smoke/dialog-check.mjs
 
 ## API
 
-See [API.md](API.md) for the embeddable Go API, player event hooks, rich text
-messages, and dialog UI helpers.
+See [API.md](API.md) for the embeddable Go API.
 
 ## Deployment Config
 
@@ -87,7 +86,19 @@ The standalone command expects a small JSON config:
   "listen": ":25565",
   "status": {
     "description": "limbgo",
-    "max_players": 1
+    "motd_minimessage": "<gradient:#55ff55:#55ffff><bold>limbgo</bold></gradient>",
+    "version_name": "limbgo",
+    "max_players": 100,
+    "online_players": 0,
+    "sample_players": [
+      { "name": "limbgo", "id": "00000000-0000-0000-0000-000000000000" }
+    ],
+    "enforces_secure_chat": false,
+    "prevents_chat_reports": true,
+    "rate_limit": {
+      "requests": 60,
+      "window_millis": 1000
+    }
   },
   "protocol": {
     "modern_protocols": "protocol/limbo/modern_protocols.json",

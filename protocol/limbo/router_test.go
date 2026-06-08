@@ -147,6 +147,50 @@ func TestProtocol340CommandEvent(t *testing.T) {
 	}
 }
 
+func TestProtocol340JoinResolverCanReturnWorldInstance(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	world := testWorld()
+	world.WorldID = "player-world"
+	server, err := limbgo.NewServer(limbgo.Config{
+		ProtocolRouter: Router{Description: "limbgo test"},
+		JoinResolver: limbgo.JoinResolverFunc(func(_ context.Context, player limbgo.Player) (limbgo.JoinTarget, error) {
+			if player.Name != "TestPlayer" {
+				t.Fatalf("join resolver player = %q, want TestPlayer", player.Name)
+			}
+			return limbgo.JoinTarget{
+				World: world,
+				Spawn: limbgo.SpawnTarget{
+					Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+					GameMode: limbgo.GameModeAdventure,
+				},
+			}, nil
+		}),
+	})
+	if err != nil {
+		t.Fatalf("new server: %v", err)
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, server)
+	}()
+
+	loginProtocol(t, clientConn, protocol340, false)
+	reader := bufio.NewReader(clientConn)
+	assertPacketID(t, reader, protocol340, packetid.StateLogin, "success")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "spawn_position")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "position")
+	chunkPacket := assertPacketID(t, reader, protocol340, packetid.StatePlay, "map_chunk")
+	assertFirstChunkBlock340(t, chunkPacket.Data, 1<<4)
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
 func TestProtocol757LoginAndChunk(t *testing.T) {
 	testModernPreConfigurationLoginAndChunk(t, protocol757)
 }

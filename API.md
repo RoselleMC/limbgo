@@ -7,15 +7,22 @@ event surfaces.
 ## Server Setup
 
 Create a server with `limbgo.NewServer` and provide a protocol router, world
-source, spawn resolver, and optional player event handler:
+source, spawn resolver, status policy, and optional player event handler:
 
 ```go
+motd, err := limbgo.ParseMiniMessage("<gold>limbgo</gold>")
+if err != nil {
+	return err
+}
 srv, err := limbgo.NewServer(limbgo.Config{
-	Addr:           ":25565",
-	ProtocolRouter: limbo.Router{},
-	Worlds:         worlds,
-	SpawnResolver:  limbgo.StaticSpawn(spawn),
-	Events:         events,
+	Addr: ":25565",
+	ProtocolRouter: limbo.Router{
+		MOTD:              motd,
+		StatusRateLimiter: limbgo.NewRateLimiter(limbgo.RateLimitConfig{}),
+	},
+	Worlds:        worlds,
+	SpawnResolver: limbgo.StaticSpawn(spawn),
+	Events:        events,
 })
 if err != nil {
 	return err
@@ -23,9 +30,77 @@ if err != nil {
 return srv.ListenAndServe(ctx)
 ```
 
-`Config.Worlds` is used by the default world resolver. For per-player routing,
-provide a custom `SpawnResolver` or implement the lower-level session services
-used by protocol routers.
+`Config.Worlds` is used by the default world resolver. For applications that
+need to select a different world instance per player, prefer `JoinResolver`.
+
+```go
+srv, err := limbgo.NewServer(limbgo.Config{
+	Addr:           ":25565",
+	ProtocolRouter: limbo.Router{},
+	JoinResolver: limbgo.JoinResolverFunc(func(ctx context.Context, player limbgo.Player) (limbgo.JoinTarget, error) {
+		world := pickWorldFor(player)
+		return limbgo.JoinTarget{
+			World: world,
+			Spawn: limbgo.SpawnTarget{
+				Position: limbgo.Vec3{X: 0, Y: 65, Z: 0},
+				GameMode: limbgo.GameModeAdventure,
+			},
+		}, nil
+	}),
+})
+```
+
+`JoinTarget.World` is a full `World` object. The schematic is only one possible
+data source for that object; world time, dimension/environment, height, logical
+height, skylight, ambient light, coordinate scale, infiniburn/effects, and spawn
+metadata travel with the world instance. If a resolver owns temporary per-player
+worlds, it may also implement `JoinReleaser` to clean them up when the
+connection closes.
+
+## Status And MOTD
+
+For static server-list data, set fields directly on `limbo.Router`:
+
+```go
+motd, err := limbgo.ParseMiniMessage("<gradient:#55ff55:#55ffff>limbgo</gradient>")
+if err != nil {
+	return err
+}
+router := limbo.Router{
+	MOTD:                motd,
+	VersionName:         "limbgo",
+	MaxPlayers:          100,
+	OnlinePlayers:       3,
+	SamplePlayers:       []limbgo.StatusSamplePlayer{{Name: "Score2", ID: "00000000-0000-0000-0000-000000000002"}},
+	EnforcesSecureChat:  limbgo.Bool(false),
+	PreventsChatReports: limbgo.Bool(true),
+	StatusRateLimiter:   limbgo.NewRateLimiter(limbgo.RateLimitConfig{}),
+}
+```
+
+For dynamic MOTD, player samples, favicon, or protocol-specific status, provide
+a `StatusProvider`:
+
+```go
+router := limbo.Router{
+	StatusProvider: limbgo.StatusProviderFunc(func(ctx context.Context, req limbgo.StatusRequest) (limbgo.Status, error) {
+		return limbgo.Status{
+			VersionName: "limbgo",
+			Protocol:    req.Protocol,
+			Description: &component.Text{Content: "Welcome " + req.Address},
+			MaxPlayers:  100,
+		}, nil
+	}),
+	StatusRateLimiter: limbgo.NewRateLimiter(limbgo.RateLimitConfig{
+		Requests: 60,
+		Window:   time.Second,
+	}),
+}
+```
+
+`StatusRequest` includes the handshake protocol, requested address/port, and
+remote address. This keeps MOTD logic in API code rather than in protocol
+adapters.
 
 ## Player Events
 
@@ -92,6 +167,15 @@ button tooltips, input labels, and option display labels.
 
 Protocol adapters serialize rich text as JSON for older clients and anonymous
 NBT for modern clients that require it.
+
+MiniMessage can be parsed with:
+
+```go
+message, err := limbgo.ParseMiniMessage("<red><bold>Hello</bold></red>")
+```
+
+The parser is lenient: malformed or currently unrepresentable tags remain
+literal text instead of crashing the connection.
 
 ## Chat And Commands
 

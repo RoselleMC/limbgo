@@ -4,15 +4,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"time"
+
+	"go.minekube.com/common/minecraft/component"
 )
 
 // FileConfig is the simple deployable configuration format.
 type FileConfig struct {
-	Listen string `json:"listen"`
-	Status struct {
-		Description string `json:"description"`
-		MaxPlayers  int    `json:"max_players"`
-	} `json:"status"`
+	Listen   string           `json:"listen"`
+	Status   FileStatusConfig `json:"status"`
 	Protocol struct {
 		ModernProtocols string `json:"modern_protocols"`
 		RegistryData    string `json:"registry_data"`
@@ -28,6 +28,31 @@ type FileConfig struct {
 		Look  Rotation `json:"look"`
 		Mode  GameMode `json:"mode"`
 	} `json:"spawn"`
+}
+
+// FileStatusConfig is the deployable JSON shape for server-list status.
+type FileStatusConfig struct {
+	Description         string                    `json:"description"`
+	MOTD                string                    `json:"motd"`
+	MOTDMiniMessage     string                    `json:"motd_minimessage"`
+	VersionName         string                    `json:"version_name"`
+	VersionProtocol     int32                     `json:"version_protocol"`
+	MaxPlayers          int                       `json:"max_players"`
+	OnlinePlayers       int                       `json:"online_players"`
+	SamplePlayers       []StatusSamplePlayer      `json:"sample_players"`
+	HidePlayers         bool                      `json:"hide_players"`
+	Favicon             string                    `json:"favicon"`
+	EnforcesSecureChat  *bool                     `json:"enforces_secure_chat"`
+	PreviewsChat        *bool                     `json:"previews_chat"`
+	PreventsChatReports *bool                     `json:"prevents_chat_reports"`
+	RateLimit           FileStatusRateLimitConfig `json:"rate_limit"`
+}
+
+// FileStatusRateLimitConfig is the deployable status ping limiter config.
+type FileStatusRateLimitConfig struct {
+	Enabled      *bool `json:"enabled"`
+	Requests     int   `json:"requests"`
+	WindowMillis int64 `json:"window_millis"`
 }
 
 // DimensionConfig is the deployable JSON shape for world dimension settings.
@@ -87,6 +112,49 @@ func LoadFileConfig(path string) (FileConfig, error) {
 		return FileConfig{}, fmt.Errorf("limbgo: world.schematic is required")
 	}
 	return cfg, nil
+}
+
+// Component returns the configured server-list rich MOTD.
+func (cfg FileStatusConfig) Component() (component.Component, error) {
+	switch {
+	case cfg.MOTDMiniMessage != "":
+		return ParseMiniMessage(cfg.MOTDMiniMessage)
+	case cfg.MOTD != "":
+		return &component.Text{Content: cfg.MOTD}, nil
+	case cfg.Description != "":
+		return &component.Text{Content: cfg.Description}, nil
+	default:
+		return &component.Text{Content: "limbgo"}, nil
+	}
+}
+
+// Options returns status response options for protocol routers.
+func (cfg FileStatusConfig) Options(description component.Component) StatusOptions {
+	return StatusOptions{
+		VersionName:         cfg.VersionName,
+		Protocol:            cfg.VersionProtocol,
+		MaxPlayers:          cfg.MaxPlayers,
+		OnlinePlayers:       cfg.OnlinePlayers,
+		SamplePlayers:       cfg.SamplePlayers,
+		HidePlayers:         cfg.HidePlayers,
+		Description:         description,
+		Favicon:             cfg.Favicon,
+		EnforcesSecureChat:  cfg.EnforcesSecureChat,
+		PreviewsChat:        cfg.PreviewsChat,
+		PreventsChatReports: cfg.PreventsChatReports,
+	}
+}
+
+// RateLimiter returns the configured status ping limiter. It is enabled by
+// default for the standalone binary and can be disabled explicitly.
+func (cfg FileStatusRateLimitConfig) RateLimiter() *RateLimiter {
+	if cfg.Enabled != nil && !*cfg.Enabled {
+		return nil
+	}
+	return NewRateLimiter(RateLimitConfig{
+		Requests: cfg.Requests,
+		Window:   time.Duration(cfg.WindowMillis) * time.Millisecond,
+	})
 }
 
 // SpawnTarget returns the static spawn described by the file.

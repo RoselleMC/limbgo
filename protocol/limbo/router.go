@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/md5"
-	"encoding/json"
 	"fmt"
 	"net"
 	"sort"
@@ -15,6 +14,7 @@ import (
 	"github.com/RoselleMC/limbgo/internal/protocol/wire"
 	"github.com/RoselleMC/limbgo/protocol/packetid"
 	"github.com/RoselleMC/limbgo/protocol/registrydata"
+	"go.minekube.com/common/minecraft/component"
 )
 
 const (
@@ -29,10 +29,22 @@ const (
 // (Minecraft 1.12.2), while modern adapters are selected from the configured
 // ModernProtocols table.
 type Router struct {
-	Description     string
-	MaxPlayers      int
-	ModernProtocols *ModernProtocols
-	RegistryData    *registrydata.Data
+	Description         string
+	MOTD                component.Component
+	StatusProvider      limbgo.StatusProvider
+	StatusRateLimiter   *limbgo.RateLimiter
+	VersionName         string
+	VersionProtocol     int32
+	MaxPlayers          int
+	OnlinePlayers       int
+	SamplePlayers       []limbgo.StatusSamplePlayer
+	HidePlayers         bool
+	Favicon             string
+	EnforcesSecureChat  *bool
+	PreviewsChat        *bool
+	PreventsChatReports *bool
+	ModernProtocols     *ModernProtocols
+	RegistryData        *registrydata.Data
 }
 
 // ServeConn implements limbgo.ProtocolRouter.
@@ -52,7 +64,7 @@ func (r Router) ServeConn(ctx context.Context, conn net.Conn, services limbgo.Se
 
 	switch info.NextState {
 	case stateStatus:
-		return r.serveStatus(conn, reader, info.ProtocolVersion)
+		return r.serveStatus(ctx, conn, reader, info)
 	case stateLogin:
 		return r.serveLogin(ctx, conn, reader, services, info)
 	default:
@@ -171,7 +183,7 @@ func formatProtocolRange(start, end int32) string {
 	return fmt.Sprintf("%d-%d", start, end)
 }
 
-func (r Router) serveStatus(conn net.Conn, reader *bufio.Reader, protocol int32) error {
+func (r Router) serveStatus(ctx context.Context, conn net.Conn, reader *bufio.Reader, info handshakeInfo) error {
 	req, err := wire.ReadPacket(reader, 0)
 	if err != nil {
 		return err
@@ -179,24 +191,15 @@ func (r Router) serveStatus(conn net.Conn, reader *bufio.Reader, protocol int32)
 	if req.ID != 0 {
 		return fmt.Errorf("expected status request packet 0, got %d", req.ID)
 	}
-
-	description := r.Description
-	if description == "" {
-		description = "limbgo"
-	}
-	maxPlayers := r.MaxPlayers
-	if maxPlayers <= 0 {
-		maxPlayers = 1
+	if !r.allowStatus(conn.RemoteAddr()) {
+		return nil
 	}
 
-	payload, err := json.Marshal(statusResponse{
-		Version: statusVersion{Name: "limbgo", Protocol: protocol},
-		Players: statusPlayers{
-			Max:    maxPlayers,
-			Online: 0,
-		},
-		Description: textComponent{Text: description},
-	})
+	status, err := r.status(ctx, conn.RemoteAddr(), info)
+	if err != nil {
+		return err
+	}
+	payload, err := limbgo.MarshalStatusJSON(status, info.ProtocolVersion)
 	if err != nil {
 		return err
 	}
@@ -217,6 +220,38 @@ func (r Router) serveStatus(conn net.Conn, reader *bufio.Reader, protocol int32)
 		return fmt.Errorf("expected ping packet 1, got %d", ping.ID)
 	}
 	return wire.WritePacket(conn, wire.Packet{ID: 1, Data: ping.Data})
+}
+
+func (r Router) allowStatus(remote net.Addr) bool {
+	return r.StatusRateLimiter == nil || r.StatusRateLimiter.Allow(remote)
+}
+
+func (r Router) status(ctx context.Context, remote net.Addr, info handshakeInfo) (limbgo.Status, error) {
+	if r.StatusProvider != nil {
+		return r.StatusProvider.Status(ctx, limbgo.StatusRequest{
+			Protocol:   info.ProtocolVersion,
+			Address:    info.Address,
+			Port:       info.Port,
+			RemoteAddr: remote,
+		})
+	}
+	description := r.MOTD
+	if description == nil && r.Description != "" {
+		description = &component.Text{Content: r.Description}
+	}
+	return limbgo.StatusOptions{
+		VersionName:         r.VersionName,
+		Protocol:            r.VersionProtocol,
+		MaxPlayers:          r.MaxPlayers,
+		OnlinePlayers:       r.OnlinePlayers,
+		SamplePlayers:       r.SamplePlayers,
+		HidePlayers:         r.HidePlayers,
+		Description:         description,
+		Favicon:             r.Favicon,
+		EnforcesSecureChat:  r.EnforcesSecureChat,
+		PreviewsChat:        r.PreviewsChat,
+		PreventsChatReports: r.PreventsChatReports,
+	}.Status(), nil
 }
 
 type handshakeInfo struct {
@@ -268,7 +303,7 @@ func writeLoginDisconnect(conn net.Conn, protocol int32, message string) error {
 	if !ok {
 		id = 0
 	}
-	payload, err := json.Marshal(textComponent{Text: message})
+	payload, err := limbgo.MarshalComponentJSON(protocol, &component.Text{Content: message})
 	if err != nil {
 		return err
 	}
@@ -290,24 +325,4 @@ func offlineUUID(username string) string {
 		sum[8:10],
 		sum[10:16],
 	)
-}
-
-type statusResponse struct {
-	Version     statusVersion `json:"version"`
-	Players     statusPlayers `json:"players"`
-	Description textComponent `json:"description"`
-}
-
-type statusVersion struct {
-	Name     string `json:"name"`
-	Protocol int32  `json:"protocol"`
-}
-
-type statusPlayers struct {
-	Max    int `json:"max"`
-	Online int `json:"online"`
-}
-
-type textComponent struct {
-	Text string `json:"text"`
 }
