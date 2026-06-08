@@ -1,0 +1,113 @@
+{
+  "757": {
+    "login_success_no_properties": true,
+    "pre_configuration": true,
+    "pre_configuration_dimension_nbt": true,
+    "position_dismount_vehicle": true,
+    "chunk_heightmap_full_nbt": true,
+    "chunk_trust_edges": true
+  },
+  "758": {
+    "login_success_no_properties": true,
+    "pre_configuration": true,
+    "pre_configuration_dimension_nbt": true,
+    "position_dismount_vehicle": true,
+    "chunk_heightmap_full_nbt": true,
+    "chunk_trust_edges": true
+  },
+  "759": {
+    "pre_configuration": true,
+    "pre_configuration_death": true,
+    "position_dismount_vehicle": true,
+    "chunk_heightmap_full_nbt": true,
+    "chunk_trust_edges": true
+  },
+  "760": {
+    "pre_configuration": true,
+    "pre_configuration_death": true,
+    "position_dismount_vehicle": true,
+    "chunk_heightmap_full_nbt": true,
+    "chunk_trust_edges": true
+  },
+  "761": {
+    "pre_configuration": true,
+    "pre_configuration_death": true,
+    "position_dismount_vehicle": true,
+    "chunk_heightmap_full_nbt": true,
+    "chunk_trust_edges": true
+  },
+  "762": {
+    "pre_configuration": true,
+    "pre_configuration_death": true,
+    "chunk_heightmap_full_nbt": true,
+    "chunk_trust_edges": true
+  },
+  "763": {
+    "pre_configuration": true,
+    "pre_configuration_death": true,
+    "pre_configuration_portal_cooldown": true,
+    "chunk_heightmap_full_nbt": true
+  },
+  "764": {
+    "registry_codec_nbt": true,
+    "legacy_play_login": true
+  },
+  "765": {
+    "registry_codec_nbt": true,
+    "legacy_play_login": true
+  },
+  "766": {
+    "strict_error_handling": true
+  },
+  "767": {
+    "strict_error_handling": true
+  },
+  "768": {
+    "position_v2": true,
+    "spawn_info_sea_level": true,
+    "position_flags_u32": true
+  },
+  "769": {
+    "position_v2": true,
+    "spawn_info_sea_level": true,
+    "position_flags_u32": true
+  },
+  "770": {
+    "position_v2": true,
+    "spawn_info_sea_level": true,
+    "position_flags_u32": true,
+    "chunk_heightmap_array": true
+  },
+  "771": {
+    "position_v2": true,
+    "spawn_info_sea_level": true,
+    "position_flags_u32": true,
+    "chunk_heightmap_array": true
+  },
+  "772": {
+    "position_v2": true,
+    "spawn_info_sea_level": true,
+    "position_flags_u32": true,
+    "chunk_heightmap_array": true
+  },
+  "773": {
+    "position_v2": true,
+    "spawn_info_sea_level": true,
+    "position_flags_u32": true,
+    "chunk_heightmap_array": true
+  },
+  "774": {
+    "position_v2": true,
+    "spawn_info_sea_level": true,
+    "position_flags_u32": true,
+    "chunk_heightmap_array": true
+  },
+  "775": {
+    "packet_id_protocol": 774,
+    "data_protocol": 774,
+    "position_v2": true,
+    "spawn_info_sea_level": true,
+    "position_flags_u32": true,
+    "chunk_heightmap_array": true
+  }
+}
