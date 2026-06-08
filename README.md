@@ -65,9 +65,11 @@ received `map_chunk`, and verifies the first block state decodes to stone:
 node tools/js-smoke/chunk-check.mjs
 ```
 
-Dialog API smoke coverage starts a temporary server that uses `Config.Events`,
-`session.ShowDialog`, `session.ClearDialog`, and `DialogClick`, then drives it
-with raw JavaScript fake clients across dialog-capable protocol lines:
+Dialog API smoke coverage starts a temporary server that uses the join-ready
+event, `session.ShowDialog`, `session.ClearDialog`, and `DialogClick`, then
+drives it with raw JavaScript fake clients across dialog-capable protocol lines
+without a chat trigger. After the click, the server writes `store_cookie` and
+`transfer` to mirror a login portal handoff:
 
 ```sh
 node tools/js-smoke/dialog-check.mjs

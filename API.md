@@ -136,6 +136,9 @@ after writing the join/chunk sequence.
 
 ```go
 events := limbgo.PlayerEventHandlerFuncs{
+	Join: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.JoinEvent) error {
+		return session.SendMessage(ctx, &component.Text{Content: "ready"})
+	},
 	Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
 		return session.SendMessage(ctx, &component.Text{Content: "chat accepted"})
 	},
@@ -152,6 +155,7 @@ The handler interface is:
 
 ```go
 type PlayerEventHandler interface {
+	HandleJoin(ctx context.Context, session PlayerSession, event *JoinEvent) error
 	HandleChat(ctx context.Context, session PlayerSession, event *ChatEvent) error
 	HandleCommand(ctx context.Context, session PlayerSession, event *CommandEvent) error
 	HandleDialogClick(ctx context.Context, session PlayerSession, event *DialogClickEvent) error
@@ -293,13 +297,40 @@ clients also reset title timings to their defaults. Protocol adapters send
 legacy title action packets for older clients and split actionbar/title packets
 for modern clients.
 
+## Join Ready
+
+`JoinEvent` is emitted after limbgo has sent the login, position, time, and
+spawn chunk packets for the selected world. This is the first callback where
+session methods are safe to call without waiting for player chat or commands.
+
+```go
+events := limbgo.PlayerEventHandlerFuncs{
+	Join: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.JoinEvent) error {
+		if !session.Capabilities().Dialog {
+			return session.SendMessage(ctx, &component.Text{Content: "Please use Minecraft 1.21.6+"})
+		}
+		return session.ShowDialog(ctx, loginDialog)
+	},
+}
+```
+
+The callback is intended for login portal flows: show a dialog immediately,
+receive `DialogClickEvent`, then call `StoreCookie` and `Transfer` when the
+player is authenticated.
+
 ## Chat And Commands
 
+`JoinEvent` is emitted when the session is ready for server-initiated packets.
 `ChatEvent` is emitted when the player sends chat text. `CommandEvent` is
 emitted when the player sends a command or, on legacy protocols, when a chat
 message starts with `/`.
 
 ```go
+type JoinEvent struct {
+	Player   Player
+	Protocol int
+}
+
 type ChatEvent struct {
 	Player   Player
 	Message  string

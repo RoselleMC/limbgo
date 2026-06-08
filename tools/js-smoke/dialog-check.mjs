@@ -80,18 +80,18 @@ async function checkVersion(port, version) {
       loginAcknowledged: packetId(data, "login", "toServer", "login_acknowledged"),
       finishConfigurationClient: packetId(data, "configuration", "toClient", "finish_configuration"),
       finishConfigurationServer: packetId(data, "configuration", "toServer", "finish_configuration"),
-      chunkBatchFinished: packetId(data, "play", "toClient", "chunk_batch_finished"),
-      chatMessage: packetId(data, "play", "toServer", "chat_message"),
       showDialog,
       clearDialog: packetId(data, "play", "toClient", "clear_dialog"),
       customClickAction: packetId(data, "play", "toServer", "custom_click_action"),
-      systemChat: packetId(data, "play", "toClient", "system_chat"),
+      storeCookie: packetId(data, "play", "toClient", "store_cookie"),
+      transfer: packetId(data, "play", "toClient", "transfer"),
     };
     const socket = net.createConnection({ host: "127.0.0.1", port });
     let buffer = Buffer.alloc(0);
     let state = "login";
     let sawShowDialog = false;
     let sawClearDialog = false;
+    let sawStoreCookie = false;
     let sentClick = false;
     let done = false;
     const timeout = setTimeout(() => {
@@ -142,10 +142,6 @@ async function checkVersion(port, version) {
         state = "play";
         return;
       }
-      if (id === ids.chunkBatchFinished) {
-        socket.write(packet(ids.chatMessage, writeString("open-dialog")));
-        return;
-      }
       if (id === ids.showDialog) {
         assertInlineDialogPayload(version, payload);
         sawShowDialog = true;
@@ -158,8 +154,20 @@ async function checkVersion(port, version) {
         sentClick = true;
         return;
       }
-      if (id === ids.systemChat && sentClick) {
-        finish(null, { version, protocol, showDialog: ids.showDialog, clearDialog: ids.clearDialog, customClickAction: ids.customClickAction });
+      if (id === ids.storeCookie && sentClick) {
+        sawStoreCookie = true;
+        return;
+      }
+      if (id === ids.transfer && sawStoreCookie) {
+        finish(null, {
+          version,
+          protocol,
+          showDialog: ids.showDialog,
+          clearDialog: ids.clearDialog,
+          customClickAction: ids.customClickAction,
+          storeCookie: ids.storeCookie,
+          transfer: ids.transfer,
+        });
       }
     }
   });
@@ -294,7 +302,7 @@ func main() {
       GameMode: limbgo.GameModeAdventure,
     }),
     Events: limbgo.PlayerEventHandlerFuncs{
-      Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
+      Join: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.JoinEvent) error {
         if event.Protocol < 771 {
           return session.SendMessage(ctx, &component.Text{Content: "dialog unsupported"})
         }
@@ -324,7 +332,10 @@ func main() {
         return session.ClearDialog(ctx)
       },
       DialogClick: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.DialogClickEvent) error {
-        return session.SendMessage(ctx, &component.Text{Content: "clicked " + event.ID})
+        if err := session.StoreCookie(ctx, "authman:transfer", []byte(event.ID)); err != nil {
+          return err
+        }
+        return session.Transfer(ctx, "velocity.internal", 25566)
       },
     },
   })
@@ -405,7 +416,8 @@ replace github.com/RoselleMC/limbgo => ${repoRoot}
       } else {
         console.log(
           `${result.version}: protocol=${result.protocol} show_dialog=0x${result.showDialog.toString(16)} ` +
-            `clear_dialog=0x${result.clearDialog.toString(16)} custom_click_action=0x${result.customClickAction.toString(16)}`,
+            `clear_dialog=0x${result.clearDialog.toString(16)} custom_click_action=0x${result.customClickAction.toString(16)} ` +
+            `store_cookie=0x${result.storeCookie.toString(16)} transfer=0x${result.transfer.toString(16)}`,
         );
       }
     }

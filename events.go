@@ -57,6 +57,7 @@ type SessionCapabilities struct {
 // PlayerEventHandler receives optional player actions after the limbo join
 // sequence has completed.
 type PlayerEventHandler interface {
+	HandleJoin(ctx context.Context, session PlayerSession, event *JoinEvent) error
 	HandleChat(ctx context.Context, session PlayerSession, event *ChatEvent) error
 	HandleCommand(ctx context.Context, session PlayerSession, event *CommandEvent) error
 	HandleDialogClick(ctx context.Context, session PlayerSession, event *DialogClickEvent) error
@@ -64,9 +65,18 @@ type PlayerEventHandler interface {
 
 // PlayerEventHandlerFuncs adapts functions to PlayerEventHandler.
 type PlayerEventHandlerFuncs struct {
+	Join        func(context.Context, PlayerSession, *JoinEvent) error
 	Chat        func(context.Context, PlayerSession, *ChatEvent) error
 	Command     func(context.Context, PlayerSession, *CommandEvent) error
 	DialogClick func(context.Context, PlayerSession, *DialogClickEvent) error
+}
+
+// HandleJoin implements PlayerEventHandler.
+func (h PlayerEventHandlerFuncs) HandleJoin(ctx context.Context, session PlayerSession, event *JoinEvent) error {
+	if h.Join == nil {
+		return nil
+	}
+	return h.Join(ctx, session, event)
 }
 
 // HandleChat implements PlayerEventHandler.
@@ -91,6 +101,13 @@ func (h PlayerEventHandlerFuncs) HandleDialogClick(ctx context.Context, session 
 		return nil
 	}
 	return h.DialogClick(ctx, session, event)
+}
+
+// JoinEvent is emitted after the initial limbo join and spawn chunk have been
+// sent. Session methods are safe to call from this callback.
+type JoinEvent struct {
+	Player   Player
+	Protocol int
 }
 
 // ChatEvent is emitted when a player sends a chat message.

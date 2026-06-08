@@ -584,6 +584,89 @@ func TestProtocol774DialogAPIAndClickEvent(t *testing.T) {
 	}
 }
 
+func TestProtocol774JoinEventCanOpenDialogWithoutChat(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	gotJoin := make(chan limbgo.JoinEvent, 1)
+	gotClick := make(chan limbgo.DialogClickEvent, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Join: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.JoinEvent) error {
+				gotJoin <- *event
+				if !session.Capabilities().Dialog {
+					return errors.New("join session missing dialog capability")
+				}
+				return session.ShowDialog(ctx, dialog.Notice(dialog.Common{
+					Title: &component.Text{Content: "Auth"},
+					Body: []dialog.Raw{
+						dialog.PlainMessage(&component.Text{Content: "Login required"}, 220),
+					},
+					Pause:       dialog.Bool(false),
+					AfterAction: dialog.AfterActionWaitForResponse,
+				}, dialog.ActionButton{
+					Label:  &component.Text{Content: "Login"},
+					Action: dialog.DynamicCustom("authman:login", dialog.Raw{"source": "join"}),
+				}))
+			},
+			DialogClick: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.DialogClickEvent) error {
+				gotClick <- *event
+				if err := session.StoreCookie(ctx, "authman:transfer", []byte("join-grant")); err != nil {
+					return err
+				}
+				return session.Transfer(ctx, "velocity.internal", 25566)
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	completeModernJoin(t, clientConn, reader, protocol774, protocol774)
+	dialogPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "show_dialog")
+	assertInlineDialogNBT(t, dialogPacket.Data)
+
+	joinEvent := <-gotJoin
+	if joinEvent.Protocol != int(protocol774) {
+		t.Fatalf("join protocol = %d, want %d", joinEvent.Protocol, protocol774)
+	}
+	if joinEvent.Player.Name != "TestPlayer" {
+		t.Fatalf("join player name = %q, want TestPlayer", joinEvent.Player.Name)
+	}
+
+	var click bytes.Buffer
+	if err := wire.WriteString(&click, "authman:login"); err != nil {
+		t.Fatalf("write custom click id: %v", err)
+	}
+	if err := wire.WriteBool(&click, false); err != nil {
+		t.Fatalf("write custom click payload option: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "custom_click_action", click.Bytes())
+
+	clickEvent := <-gotClick
+	if clickEvent.ID != "authman:login" {
+		t.Fatalf("dialog click id = %q, want authman:login", clickEvent.ID)
+	}
+	cookiePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "store_cookie")
+	assertStoreCookiePacket(t, cookiePacket.Data, "authman:transfer", []byte("join-grant"))
+	transferPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "transfer")
+	assertTransferPacket(t, transferPacket.Data, "velocity.internal", 25566)
+
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
 func TestProtocol775DialogPacketAlias(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 

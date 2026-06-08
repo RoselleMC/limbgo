@@ -147,6 +147,15 @@ func servePlayEvents(ctx context.Context, conn net.Conn, reader *bufio.Reader, s
 		return nil
 	}
 	session := &playSession{conn: conn, player: player, adapter: adapter}
+	if err := handler.HandleJoin(ctx, session, &limbgo.JoinEvent{
+		Player:   player,
+		Protocol: int(adapter.protocol),
+	}); err != nil {
+		return err
+	}
+	if session.Closed() {
+		return nil
+	}
 	for {
 		if err := ctx.Err(); err != nil {
 			return nil
