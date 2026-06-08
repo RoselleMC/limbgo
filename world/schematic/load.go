@@ -77,8 +77,10 @@ func buildWorld(data spongeSchematic, opts Options) (*limbgo.MemoryWorld, error)
 		worldID = "default"
 	}
 	dimension := opts.Dimension
-	if dimension.Name == "" {
+	if dimension.Name == "" && dimension.Environment == "" {
 		dimension = defaultDimension(int32(data.Height))
+	} else {
+		dimension = limbgo.NormalizeDimension(dimension, int32(data.Height))
 	}
 
 	chunks := make(map[limbgo.ChunkPos]limbgo.Chunk)
@@ -262,15 +264,5 @@ func mod(value, divisor int32) int32 {
 }
 
 func defaultDimension(height int32) limbgo.Dimension {
-	return limbgo.Dimension{
-		Name:               "minecraft:overworld",
-		MinY:               0,
-		Height:             height,
-		Natural:            true,
-		HasSkylight:        true,
-		AmbientLight:       0,
-		CoordinateScale:    1,
-		RespawnAnchorWorks: false,
-		BedWorks:           true,
-	}
+	return limbgo.DimensionPreset(limbgo.DimensionOverworld, height)
 }

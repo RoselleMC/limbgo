@@ -12,37 +12,28 @@ import (
 )
 
 func dimensionTypeRegistry766(dimension limbgo.Dimension) registrydata.Registry {
-	if dimension.Name == "" {
-		dimension.Name = "minecraft:overworld"
-	}
-	if dimension.Height == 0 {
-		dimension.Height = 256
-	}
-	if dimension.CoordinateScale == 0 {
-		dimension.CoordinateScale = 1
-	}
+	dimension = limbgo.NormalizeDimension(dimension, 256)
 	var n nbtWriter
 	n.writeAnonymousCompound(func() {
-		n.writeByte("piglin_safe", 0)
+		if dimension.FixedTime != nil {
+			n.writeLong("fixed_time", *dimension.FixedTime)
+		}
+		n.writeByte("piglin_safe", boolByte(dimension.PiglinSafe))
 		n.writeByte("natural", boolByte(dimension.Natural))
 		n.writeFloat("ambient_light", dimension.AmbientLight)
-		n.writeInt("monster_spawn_block_light_limit", 0)
-		n.writeString("infiniburn", "#minecraft:infiniburn_overworld")
+		n.writeInt("monster_spawn_block_light_limit", dimension.MonsterSpawn.BlockLightLimit)
+		n.writeString("infiniburn", dimension.Infiniburn)
 		n.writeByte("respawn_anchor_works", boolByte(dimension.RespawnAnchorWorks))
 		n.writeByte("has_skylight", boolByte(dimension.HasSkylight))
 		n.writeByte("bed_works", boolByte(dimension.BedWorks))
-		n.writeString("effects", "minecraft:overworld")
-		n.writeByte("has_raids", 1)
-		n.writeInt("logical_height", dimension.Height)
+		n.writeString("effects", dimension.Effects)
+		n.writeByte("has_raids", boolByte(dimension.HasRaids))
+		n.writeInt("logical_height", dimension.LogicalHeight)
 		n.writeDouble("coordinate_scale", dimension.CoordinateScale)
-		n.writeCompound("monster_spawn_light_level", func() {
-			n.writeInt("min_inclusive", 0)
-			n.writeInt("max_inclusive", 7)
-			n.writeString("type", "minecraft:uniform")
-		})
+		writeMonsterSpawnLightLevel(&n, dimension.MonsterSpawn.LightLevel)
 		n.writeInt("min_y", dimension.MinY)
-		n.writeByte("ultrawarm", 0)
-		n.writeByte("has_ceiling", 0)
+		n.writeByte("ultrawarm", boolByte(dimension.UltraWarm))
+		n.writeByte("has_ceiling", boolByte(dimension.HasCeiling))
 		n.writeInt("height", dimension.Height)
 	})
 	return registrydata.Registry{
@@ -52,6 +43,26 @@ func dimensionTypeRegistry766(dimension limbgo.Dimension) registrydata.Registry 
 			Value: n.bytes(),
 		}},
 	}
+}
+
+func writeMonsterSpawnLightLevel(n *nbtWriter, provider limbgo.IntProvider) {
+	if provider.Value != nil {
+		n.writeInt("monster_spawn_light_level", *provider.Value)
+		return
+	}
+	min := int32(0)
+	max := int32(7)
+	if provider.MinInclusive != nil {
+		min = *provider.MinInclusive
+	}
+	if provider.MaxInclusive != nil {
+		max = *provider.MaxInclusive
+	}
+	n.writeCompound("monster_spawn_light_level", func() {
+		n.writeInt("min_inclusive", min)
+		n.writeInt("max_inclusive", max)
+		n.writeString("type", "minecraft:uniform")
+	})
 }
 
 func heightmapsNBT766() []byte {

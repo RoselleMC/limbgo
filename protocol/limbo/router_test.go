@@ -10,8 +10,10 @@ import (
 	"testing"
 
 	"github.com/RoselleMC/limbgo"
+	"github.com/RoselleMC/limbgo/dialog"
 	"github.com/RoselleMC/limbgo/internal/protocol/wire"
 	"github.com/RoselleMC/limbgo/protocol/packetid"
+	"go.minekube.com/common/minecraft/component"
 )
 
 func TestProtocol47LoginAndChunk(t *testing.T) {
@@ -93,6 +95,53 @@ func TestProtocol340LoginAndChunk(t *testing.T) {
 	chunkPacket := assertPacketID(t, reader, protocol340, packetid.StatePlay, "map_chunk")
 	assertFirstChunkBlock340(t, chunkPacket.Data, 1<<4)
 
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol340CommandEvent(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	got := make(chan string, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Command: func(_ context.Context, _ limbgo.PlayerSession, event *limbgo.CommandEvent) error {
+				got <- event.Command
+				return nil
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol340, false)
+	reader := bufio.NewReader(clientConn)
+	assertPacketID(t, reader, protocol340, packetid.StateLogin, "success")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "spawn_position")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "position")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "map_chunk")
+
+	var command bytes.Buffer
+	if err := wire.WriteString(&command, "/hub"); err != nil {
+		t.Fatalf("write command: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol340, packetid.StatePlay, "chat", command.Bytes())
+
+	if command := <-got; command != "hub" {
+		t.Fatalf("command event = %q, want hub", command)
+	}
+	_ = clientConn.Close()
 	if err := <-errCh; err != nil {
 		t.Fatalf("router error: %v", err)
 	}
@@ -217,6 +266,247 @@ func TestProtocol774LoginConfigurationAndChunk(t *testing.T) {
 
 func TestProtocol775LoginConfigurationAliasAndChunk(t *testing.T) {
 	testModernLoginConfigurationAndChunkWithPacketProtocol(t, protocol775, protocol774)
+}
+
+func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	got := make(chan string, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
+				got <- event.Message
+				return session.SendMessage(ctx, &component.Text{
+					Content: "accepted",
+					Extra: []component.Component{
+						&component.Text{Content: " rich"},
+					},
+				})
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < 4; i++ {
+		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "position")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	var message bytes.Buffer
+	if err := wire.WriteString(&message, "hello"); err != nil {
+		t.Fatalf("write chat message: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "chat_message", message.Bytes())
+	if message := <-got; message != "hello" {
+		t.Fatalf("chat event = %q, want hello", message)
+	}
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "system_chat")
+
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol774DialogAPIAndClickEvent(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	gotClick := make(chan limbgo.DialogClickEvent, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
+				if err := session.ShowDialog(ctx, dialog.Notice(dialog.Common{
+					Title: &component.Text{
+						Content: "Welcome",
+						Extra: []component.Component{
+							&component.Text{Content: " rich"},
+						},
+					},
+					Body: []dialog.Raw{
+						dialog.PlainMessage(&component.Text{Content: "Choose an action"}, 220),
+					},
+					Inputs: []dialog.Raw{
+						dialog.TextInput("name", &component.Text{Content: "Name"}, dialog.TextInputOptions{
+							Initial:   "Steve",
+							MaxLength: 32,
+						}),
+						dialog.NumberRangeInput("level", &component.Text{Content: "Level"}, dialog.NumberRangeOptions{
+							Start:   1,
+							End:     10,
+							Initial: dialog.Float(4.5),
+							Step:    dialog.Float(0.5),
+						}),
+					},
+					CanCloseWithEscape: dialog.Bool(true),
+					Pause:              dialog.Bool(false),
+					AfterAction:        dialog.AfterActionWaitForResponse,
+				}, dialog.ActionButton{
+					Label:   &component.Text{Content: "Submit"},
+					Tooltip: &component.Text{Content: "Send rich payload"},
+					Action:  dialog.DynamicCustom("limbgo:submit", dialog.Raw{"source": "test"}),
+				})); err != nil {
+					return err
+				}
+				return session.ClearDialog(ctx)
+			},
+			DialogClick: func(_ context.Context, _ limbgo.PlayerSession, event *limbgo.DialogClickEvent) error {
+				gotClick <- *event
+				return nil
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < 4; i++ {
+		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "position")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	var message bytes.Buffer
+	if err := wire.WriteString(&message, "open"); err != nil {
+		t.Fatalf("write chat message: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "chat_message", message.Bytes())
+	dialogPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "show_dialog")
+	assertInlineDialogNBT(t, dialogPacket.Data)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "clear_dialog")
+
+	var click bytes.Buffer
+	if err := wire.WriteString(&click, "limbgo:submit"); err != nil {
+		t.Fatalf("write custom click id: %v", err)
+	}
+	if err := wire.WriteBool(&click, false); err != nil {
+		t.Fatalf("write custom click payload option: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "custom_click_action", click.Bytes())
+	clickEvent := <-gotClick
+	if clickEvent.ID != "limbgo:submit" {
+		t.Fatalf("dialog click id = %q, want limbgo:submit", clickEvent.ID)
+	}
+	if clickEvent.Protocol != int(protocol774) {
+		t.Fatalf("dialog click protocol = %d, want %d", clickEvent.Protocol, protocol774)
+	}
+	if len(clickEvent.Payload) != 0 {
+		t.Fatalf("dialog click payload len = %d, want 0", len(clickEvent.Payload))
+	}
+
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol775DialogPacketAlias(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	errCh := make(chan error, 1)
+	go func() {
+		adapter := playAdapter{protocol: protocol775, packetProtocol: protocol774}
+		if err := writeShowDialog(serverConn, adapter, dialog.Notice(dialog.Common{
+			Title: dialog.Text("Alias"),
+		}, dialog.Button(dialog.Text("OK"), dialog.Custom("limbgo:ok", nil)))); err != nil {
+			errCh <- err
+			return
+		}
+		errCh <- writeClearDialog(serverConn, adapter)
+	}()
+
+	reader := bufio.NewReader(clientConn)
+	dialogPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "show_dialog")
+	assertInlineDialogNBT(t, dialogPacket.Data)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "clear_dialog")
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("dialog alias write: %v", err)
+	}
+}
+
+func TestProtocol774ConfiguredWorldTime(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	world := testWorld()
+	timeOfDay := int64(18000)
+	world.WorldDimension = limbgo.DimensionPreset(limbgo.DimensionNether, 256)
+	world.WorldDimension.TimeOfDay = &timeOfDay
+	world.WorldDimension.WorldAge = 42
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: world,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < 4; i++ {
+		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "position")
+	timePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "update_time")
+	assertUpdateTime(t, timePacket.Data, 42, 18000)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
 }
 
 func TestLoadModernProtocolsBytesAndSupportedList(t *testing.T) {
@@ -365,6 +655,43 @@ func assertPacketID(t *testing.T, reader *bufio.Reader, protocol int32, state pa
 		t.Fatalf("packet %s id = %#x, want %#x", name, packet.ID, want)
 	}
 	return packet
+}
+
+func assertInlineDialogNBT(t *testing.T, data []byte) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	holder, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read dialog holder: %v", err)
+	}
+	if holder != 0 {
+		t.Fatalf("dialog holder = %d, want inline holder 0", holder)
+	}
+	if err := skipAnonymousNBT(reader); err != nil {
+		t.Fatalf("skip dialog nbt: %v", err)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("dialog packet has %d trailing bytes", reader.Len())
+	}
+}
+
+func assertUpdateTime(t *testing.T, data []byte, wantAge, wantTime int64) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	age, err := wire.ReadLong(reader)
+	if err != nil {
+		t.Fatalf("read world age: %v", err)
+	}
+	timeOfDay, err := wire.ReadLong(reader)
+	if err != nil {
+		t.Fatalf("read time of day: %v", err)
+	}
+	if age != wantAge || timeOfDay != wantTime {
+		t.Fatalf("update_time = age %d time %d, want age %d time %d", age, timeOfDay, wantAge, wantTime)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("update_time has %d trailing bytes", reader.Len())
+	}
 }
 
 func assertFirstChunkBlock47(t *testing.T, data []byte, want uint16) {
@@ -689,6 +1016,25 @@ func writeServerboundNamedPacket(t *testing.T, conn net.Conn, protocol int32, st
 	}
 }
 
+func loginProtocol(t *testing.T, conn net.Conn, protocol int32, uuidOption bool) {
+	t.Helper()
+	if err := writeHandshake(conn, protocol, "localhost", 25565, stateLogin); err != nil {
+		t.Fatalf("write handshake: %v", err)
+	}
+	var loginStart bytes.Buffer
+	if err := wire.WriteString(&loginStart, "TestPlayer"); err != nil {
+		t.Fatalf("write username: %v", err)
+	}
+	if uuidOption {
+		if err := wire.WriteBool(&loginStart, false); err != nil {
+			t.Fatalf("write uuid option: %v", err)
+		}
+	}
+	if err := wire.WritePacket(conn, wire.Packet{ID: 0, Data: loginStart.Bytes()}); err != nil {
+		t.Fatalf("write login_start: %v", err)
+	}
+}
+
 func writeHandshake(conn net.Conn, protocol int32, address string, port uint16, nextState int32) error {
 	var data bytes.Buffer
 	if err := wire.WriteVarInt(&data, protocol); err != nil {
@@ -736,8 +1082,9 @@ func testWorld() *limbgo.MemoryWorld {
 }
 
 type testServices struct {
-	spawn limbgo.SpawnTarget
-	world limbgo.World
+	spawn  limbgo.SpawnTarget
+	world  limbgo.World
+	events limbgo.PlayerEventHandler
 }
 
 func (s testServices) ResolveSpawn(context.Context, limbgo.Player) (limbgo.SpawnTarget, error) {
@@ -746,4 +1093,8 @@ func (s testServices) ResolveSpawn(context.Context, limbgo.Player) (limbgo.Spawn
 
 func (s testServices) World(context.Context, string) (limbgo.World, error) {
 	return s.world, nil
+}
+
+func (s testServices) Events() limbgo.PlayerEventHandler {
+	return s.events
 }

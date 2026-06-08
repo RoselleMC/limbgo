@@ -26,7 +26,11 @@ func main() {
 		fatal(err)
 	}
 
-	world, err := schematic.LoadFile(fileCfg.World.Schematic, schematic.Options{WorldID: fileCfg.World.ID})
+	schematicOptions := schematic.Options{WorldID: fileCfg.World.ID}
+	if !fileCfg.World.Dimension.Empty() {
+		schematicOptions.Dimension = fileCfg.Dimension(0)
+	}
+	world, err := schematic.LoadFile(fileCfg.World.Schematic, schematicOptions)
 	if err != nil {
 		fatal(err)
 	}

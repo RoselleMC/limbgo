@@ -65,6 +65,19 @@ received `map_chunk`, and verifies the first block state decodes to stone:
 node tools/js-smoke/chunk-check.mjs
 ```
 
+Dialog API smoke coverage starts a temporary server that uses `Config.Events`,
+`session.ShowDialog`, `session.ClearDialog`, and `DialogClick`, then drives it
+with raw JavaScript fake clients across dialog-capable protocol lines:
+
+```sh
+node tools/js-smoke/dialog-check.mjs
+```
+
+## API
+
+See [API.md](API.md) for the embeddable Go API, player event hooks, rich text
+messages, and dialog UI helpers.
+
 ## Deployment Config
 
 The standalone command expects a small JSON config:
@@ -82,7 +95,29 @@ The standalone command expects a small JSON config:
   },
   "world": {
     "id": "spawn",
-    "schematic": "spawn.schem"
+    "schematic": "spawn.schem",
+    "dimension": {
+      "environment": "overworld",
+      "time": 6000,
+      "world_age": 0,
+      "fixed_time": 6000,
+      "ambient_light": 0,
+      "has_skylight": true,
+      "has_ceiling": false,
+      "ultrawarm": false,
+      "natural": true,
+      "piglin_safe": false,
+      "respawn_anchor_works": false,
+      "bed_works": true,
+      "has_raids": true,
+      "coordinate_scale": 1,
+      "logical_height": 256,
+      "infiniburn": "#minecraft:infiniburn_overworld",
+      "effects": "minecraft:overworld",
+      "monster_spawn_block_light_limit": 0,
+      "monster_spawn_light_min": 0,
+      "monster_spawn_light_max": 7
+    }
   },
   "spawn": {
     "world": "spawn",
@@ -100,6 +135,17 @@ regenerated registry data without changing Go source.
 `world/schematic` loads Sponge `.schem` files into a version-neutral world
 palette. Protocol adapters translate that palette to client-specific block state
 IDs at chunk serialization time.
+
+The `world.dimension` block is optional. `environment` accepts `overworld`,
+`nether`, or `end` and fills vanilla-like defaults for limbo-relevant client
+state. Individual fields can then override the preset. Even without mobs,
+portals, or beds, modern clients receive dimension type registry data, so limbgo
+tracks the properties that affect rendering or client behavior: `fixed_time`,
+`time`, `world_age`, `ambient_light`, `has_skylight`, `has_ceiling`, `ultrawarm`,
+`natural`, `piglin_safe`, `respawn_anchor_works`, `bed_works`, `has_raids`,
+`coordinate_scale`, `logical_height`, `infiniburn`, `effects`, and monster spawn
+light fields. Legacy clients receive the matching dimension id for overworld,
+nether, or end.
 
 ## Current Protocol State
 

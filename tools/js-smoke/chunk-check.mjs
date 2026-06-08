@@ -609,13 +609,17 @@ require github.com/RoselleMC/limbgo v0.0.0
 replace github.com/RoselleMC/limbgo => ${repoRoot}
 `,
   );
-  fs.writeFileSync(path.join(serverDir, "main.go"), goServerSource(port));
+	fs.writeFileSync(path.join(serverDir, "main.go"), goServerSource(port));
 
-  const serverPath = path.join(serverDir, "limbgo-js-smoke-server");
-  execFileSync("go", ["build", "-o", serverPath, "."], {
-    cwd: serverDir,
-    stdio: "inherit",
-  });
+	const serverPath = path.join(serverDir, "limbgo-js-smoke-server");
+	execFileSync("go", ["mod", "tidy"], {
+		cwd: serverDir,
+		stdio: "inherit",
+	});
+	execFileSync("go", ["build", "-o", serverPath, "."], {
+		cwd: serverDir,
+		stdio: "inherit",
+	});
   const server = spawn(serverPath, {
     stdio: ["ignore", "pipe", "pipe"],
   });

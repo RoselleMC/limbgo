@@ -51,11 +51,17 @@ func serveModernPreConfigurationProtocol(ctx context.Context, conn net.Conn, ser
 	if err := writePlayerPositionModern(conn, spawn, cfg); err != nil {
 		return err
 	}
+	if err := writeUpdateTime(cfg.packetProtocol(), conn, world); err != nil {
+		return err
+	}
 	chunk, ok := world.Chunk(chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
 	if !ok {
 		return fmt.Errorf("%w: spawn chunk %d,%d", limbgo.ErrWorldNotFound, chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
 	}
-	return writeMapChunkModern(conn, world, chunk, cfg)
+	if err := writeMapChunkModern(conn, world, chunk, cfg); err != nil {
+		return err
+	}
+	return servePlayEvents(ctx, conn, bufio.NewReader(conn), services, player, newModernPlayAdapter(cfg))
 }
 
 type modernProtocolConfig struct {
@@ -151,6 +157,9 @@ func serveModernProtocol(ctx context.Context, conn net.Conn, reader *bufio.Reade
 	if err := writePlayerPositionModern(conn, spawn, cfg); err != nil {
 		return err
 	}
+	if err := writeUpdateTime(cfg.packetProtocol(), conn, world); err != nil {
+		return err
+	}
 	chunk, ok := world.Chunk(chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
 	if !ok {
 		return fmt.Errorf("%w: spawn chunk %d,%d", limbgo.ErrWorldNotFound, chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
@@ -161,7 +170,10 @@ func serveModernProtocol(ctx context.Context, conn net.Conn, reader *bufio.Reade
 	if err := writeMapChunkModern(conn, world, chunk, cfg); err != nil {
 		return err
 	}
-	return writeChunkBatchFinishedModern(conn, 1, cfg)
+	if err := writeChunkBatchFinishedModern(conn, 1, cfg); err != nil {
+		return err
+	}
+	return servePlayEvents(ctx, conn, reader, services, player, newModernPlayAdapter(cfg))
 }
 
 func writeLoginSuccessModern(conn net.Conn, player limbgo.Player, cfg modernProtocolConfig) error {
@@ -236,10 +248,7 @@ func writeTagsModern(conn net.Conn, cfg modernProtocolConfig) error {
 }
 
 func writeJoinGamePreConfigurationModern(conn net.Conn, spawn limbgo.SpawnTarget, world limbgo.World, cfg modernProtocolConfig, registryData *registrydata.Data) error {
-	dimensionName := world.Dimension().Name
-	if dimensionName == "" {
-		dimensionName = "minecraft:overworld"
-	}
+	dimensionName := limbgo.NormalizeDimension(world.Dimension(), 256).Name
 	codec, ok := registryData.DimensionCodec(cfg.dataProtocolID())
 	if !ok {
 		return fmt.Errorf("no generated dimension codec for protocol %d", cfg.protocol)
@@ -320,10 +329,7 @@ func writeJoinGamePreConfigurationModern(conn net.Conn, spawn limbgo.SpawnTarget
 }
 
 func writeJoinGameLegacyModern(conn net.Conn, spawn limbgo.SpawnTarget, world limbgo.World, cfg modernProtocolConfig) error {
-	dimensionName := world.Dimension().Name
-	if dimensionName == "" {
-		dimensionName = "minecraft:overworld"
-	}
+	dimensionName := limbgo.NormalizeDimension(world.Dimension(), 256).Name
 	var data bytes.Buffer
 	if err := wire.WriteInt(&data, 1); err != nil {
 		return err
@@ -386,6 +392,7 @@ func writeJoinGameLegacyModern(conn net.Conn, spawn limbgo.SpawnTarget, world li
 }
 
 func writeJoinGameModern(conn net.Conn, spawn limbgo.SpawnTarget, world limbgo.World, cfg modernProtocolConfig) error {
+	dimensionName := limbgo.NormalizeDimension(world.Dimension(), 256).Name
 	var data bytes.Buffer
 	if err := wire.WriteInt(&data, 1); err != nil {
 		return err
@@ -396,7 +403,7 @@ func writeJoinGameModern(conn net.Conn, spawn limbgo.SpawnTarget, world limbgo.W
 	if err := wire.WriteVarInt(&data, 1); err != nil {
 		return err
 	}
-	if err := wire.WriteString(&data, world.Dimension().Name); err != nil {
+	if err := wire.WriteString(&data, dimensionName); err != nil {
 		return err
 	}
 	if err := wire.WriteVarInt(&data, 1); err != nil {
@@ -420,7 +427,7 @@ func writeJoinGameModern(conn net.Conn, spawn limbgo.SpawnTarget, world limbgo.W
 	if err := wire.WriteVarInt(&data, 0); err != nil {
 		return err
 	}
-	if err := wire.WriteString(&data, world.Dimension().Name); err != nil {
+	if err := wire.WriteString(&data, dimensionName); err != nil {
 		return err
 	}
 	if err := wire.WriteLong(&data, 0); err != nil {

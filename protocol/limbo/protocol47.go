@@ -1,6 +1,7 @@
 package limbo
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -27,7 +28,7 @@ func serveProtocol47(ctx context.Context, conn net.Conn, services limbgo.Session
 	if err := writeLoginSuccess(protocol47, conn, player); err != nil {
 		return err
 	}
-	if err := writeJoinGame47(conn, spawn); err != nil {
+	if err := writeJoinGame47(conn, spawn, world); err != nil {
 		return err
 	}
 	if err := writeSpawnPosition47(conn, spawn); err != nil {
@@ -36,11 +37,17 @@ func serveProtocol47(ctx context.Context, conn net.Conn, services limbgo.Session
 	if err := writePlayerPosition47(conn, spawn); err != nil {
 		return err
 	}
+	if err := writeUpdateTime(protocol47, conn, world); err != nil {
+		return err
+	}
 	chunk, ok := world.Chunk(chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
 	if !ok {
 		return fmt.Errorf("%w: spawn chunk %d,%d", limbgo.ErrWorldNotFound, chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
 	}
-	return writeMapChunk47(conn, world, chunk)
+	if err := writeMapChunk47(conn, world, chunk); err != nil {
+		return err
+	}
+	return servePlayEvents(ctx, conn, bufio.NewReader(conn), services, player, newPlayAdapter(protocol47))
 }
 
 func writeLoginSuccess(protocol int32, conn net.Conn, player limbgo.Player) error {
@@ -54,7 +61,7 @@ func writeLoginSuccess(protocol int32, conn net.Conn, player limbgo.Player) erro
 	return writeNamedPacket(protocol, conn, packetid.StateLogin, "success", data.Bytes())
 }
 
-func writeJoinGame47(conn net.Conn, spawn limbgo.SpawnTarget) error {
+func writeJoinGame47(conn net.Conn, spawn limbgo.SpawnTarget, world limbgo.World) error {
 	var data bytes.Buffer
 	if err := wire.WriteInt(&data, 1); err != nil {
 		return err
@@ -62,7 +69,7 @@ func writeJoinGame47(conn net.Conn, spawn limbgo.SpawnTarget) error {
 	if err := wire.WriteByte(&data, byte(spawn.GameMode)); err != nil {
 		return err
 	}
-	if err := wire.WriteByte(&data, 0); err != nil {
+	if err := wire.WriteByte(&data, legacyDimensionID(world.Dimension())); err != nil {
 		return err
 	}
 	if err := wire.WriteByte(&data, 0); err != nil {

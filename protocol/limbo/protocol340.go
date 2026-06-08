@@ -1,6 +1,7 @@
 package limbo
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"fmt"
@@ -26,7 +27,7 @@ func serveProtocol340(ctx context.Context, conn net.Conn, services limbgo.Sessio
 	if err := writeLoginSuccess(protocol340, conn, player); err != nil {
 		return err
 	}
-	if err := writeJoinGame340(conn, spawn); err != nil {
+	if err := writeJoinGame340(conn, spawn, world); err != nil {
 		return err
 	}
 	if err := writeSpawnPosition(protocol340, conn, spawn); err != nil {
@@ -35,14 +36,20 @@ func serveProtocol340(ctx context.Context, conn net.Conn, services limbgo.Sessio
 	if err := writePlayerPosition340(conn, spawn); err != nil {
 		return err
 	}
+	if err := writeUpdateTime(protocol340, conn, world); err != nil {
+		return err
+	}
 	chunk, ok := world.Chunk(chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
 	if !ok {
 		return fmt.Errorf("%w: spawn chunk %d,%d", limbgo.ErrWorldNotFound, chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
 	}
-	return writeMapChunk340(conn, world, chunk)
+	if err := writeMapChunk340(conn, world, chunk); err != nil {
+		return err
+	}
+	return servePlayEvents(ctx, conn, bufio.NewReader(conn), services, player, newPlayAdapter(protocol340))
 }
 
-func writeJoinGame340(conn net.Conn, spawn limbgo.SpawnTarget) error {
+func writeJoinGame340(conn net.Conn, spawn limbgo.SpawnTarget, world limbgo.World) error {
 	var data bytes.Buffer
 	if err := wire.WriteInt(&data, 1); err != nil {
 		return err
@@ -50,7 +57,7 @@ func writeJoinGame340(conn net.Conn, spawn limbgo.SpawnTarget) error {
 	if err := wire.WriteByte(&data, byte(spawn.GameMode)); err != nil {
 		return err
 	}
-	if err := wire.WriteInt(&data, 0); err != nil {
+	if err := wire.WriteInt(&data, legacyDimensionInt(world.Dimension())); err != nil {
 		return err
 	}
 	if err := wire.WriteByte(&data, 0); err != nil {

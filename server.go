@@ -15,6 +15,7 @@ type Config struct {
 	ProtocolRouter ProtocolRouter
 	Worlds         WorldProvider
 	SpawnResolver  SpawnResolver
+	Events         PlayerEventHandler
 	Logger         *slog.Logger
 }
 
@@ -144,6 +145,11 @@ func (s *Server) ResolveSpawn(ctx context.Context, player Player) (SpawnTarget, 
 // World implements SessionServices.
 func (s *Server) World(ctx context.Context, id string) (World, error) {
 	return s.cfg.Worlds.World(ctx, id)
+}
+
+// Events implements SessionServices.
+func (s *Server) Events() PlayerEventHandler {
+	return s.cfg.Events
 }
 
 func (s *Server) trackConn(conn net.Conn) {

@@ -19,4 +19,5 @@ type ProtocolRouter interface {
 type SessionServices interface {
 	ResolveSpawn(ctx context.Context, player Player) (SpawnTarget, error)
 	World(ctx context.Context, id string) (World, error)
+	Events() PlayerEventHandler
 }
