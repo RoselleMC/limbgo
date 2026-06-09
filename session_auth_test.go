@@ -62,3 +62,16 @@ func TestOfflineLoginPlayerMarksUnverifiedClaim(t *testing.T) {
 		t.Fatalf("requested host = %q", player.RequestedHost)
 	}
 }
+
+func TestOfflineUUIDMatchesVanillaAlgorithm(t *testing.T) {
+	tests := map[string]string{
+		"Steve":      "5627dd98-e6be-3c21-b8a8-e92344183641",
+		"Alex":       "36532b5e-c442-3dbb-a24c-c7e55d0f979a",
+		"TestPlayer": "bb77495a-a740-3169-a238-69654c8bd2c1",
+	}
+	for username, want := range tests {
+		if got := OfflineUUID(username); got != want {
+			t.Fatalf("OfflineUUID(%q) = %q, want %q", username, got, want)
+		}
+	}
+}

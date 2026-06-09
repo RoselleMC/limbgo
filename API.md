@@ -126,7 +126,23 @@ router := limbo.Router{
 }
 ```
 
-Hybrid deployments can choose offline or online mode per connection:
+Hybrid deployments can attempt online-mode session proof first and continue as
+an unverified offline-mode player when the verifier reports an invalid session:
+
+```go
+router := limbo.Router{
+	LoginMode:       limbgo.LoginModeHybrid,
+	SessionVerifier: appVerifier,
+}
+```
+
+Only errors wrapping `limbgo.ErrInvalidLogin` fall back to offline mode. Verifier
+outages such as rate limits, proxy failures, or upstream 5xx errors should wrap
+`limbgo.ErrSessionUnavailable` or another non-invalid error so the connection is
+rejected instead of silently downgrading identity.
+
+Deployments can also choose offline or online mode per connection before any
+session proof is requested:
 
 ```go
 router := limbo.Router{

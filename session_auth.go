@@ -26,6 +26,7 @@ type LoginMode string
 const (
 	LoginModeOffline LoginMode = "offline"
 	LoginModeOnline  LoginMode = "online"
+	LoginModeHybrid  LoginMode = "hybrid"
 )
 
 // LoginRequest is the claimed login information available before online-mode
@@ -127,7 +128,7 @@ func (v yggdrasilVerifier) VerifySession(ctx context.Context, proof SessionProof
 		return VerifiedProfile{}, fmt.Errorf("%w: session not joined", ErrInvalidLogin)
 	}
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return VerifiedProfile{}, fmt.Errorf("%w: sessionserver status %d", ErrInvalidLogin, res.StatusCode)
+		return VerifiedProfile{}, fmt.Errorf("%w: sessionserver status %d", ErrSessionUnavailable, res.StatusCode)
 	}
 	var payload yggdrasilHasJoinedResponse
 	if err := json.NewDecoder(res.Body).Decode(&payload); err != nil {

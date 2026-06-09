@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"sort"
@@ -123,12 +124,28 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 	case limbgo.LoginModeOnline:
 		verifier := r.sessionVerifier()
 		var profile limbgo.VerifiedProfile
-		conn, reader, profile, err = performOnlineSessionAuth(ctx, conn, reader, info.ProtocolVersion, loginPacketProtocol, loginRequest, verifier, r.OnlineServerID)
+		authConn, authReader, profile, err := performOnlineSessionAuth(ctx, conn, reader, info.ProtocolVersion, loginPacketProtocol, loginRequest, verifier, r.OnlineServerID)
 		if err != nil {
-			_ = writeLoginDisconnect(conn, loginPacketProtocol, "Session verification failed")
+			_ = writeLoginDisconnect(loginDisconnectConn(authConn, conn), loginPacketProtocol, "Session verification failed")
 			return err
 		}
+		conn, reader = authConn, authReader
 		player = limbgo.VerifiedLoginPlayer(loginRequest, profile)
+	case limbgo.LoginModeHybrid:
+		verifier := r.sessionVerifier()
+		var profile limbgo.VerifiedProfile
+		authConn, authReader, profile, err := performOnlineSessionAuth(ctx, conn, reader, info.ProtocolVersion, loginPacketProtocol, loginRequest, verifier, r.OnlineServerID)
+		switch {
+		case err == nil:
+			conn, reader = authConn, authReader
+			player = limbgo.VerifiedLoginPlayer(loginRequest, profile)
+		case errors.Is(err, limbgo.ErrInvalidLogin) && authConn != nil && authReader != nil:
+			conn, reader = authConn, authReader
+			player = limbgo.OfflineLoginPlayer(loginRequest)
+		default:
+			_ = writeLoginDisconnect(loginDisconnectConn(authConn, conn), loginPacketProtocol, "Session verification failed")
+			return err
+		}
 	default:
 		return fmt.Errorf("%w: unsupported login mode %q", limbgo.ErrInvalidLogin, loginMode)
 	}
@@ -151,6 +168,13 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 		}
 		return writeLoginDisconnect(conn, info.ProtocolVersion, "limbgo play support currently implements protocols "+r.supportedPlayProtocols())
 	}
+}
+
+func loginDisconnectConn(primary net.Conn, fallback net.Conn) net.Conn {
+	if primary != nil {
+		return primary
+	}
+	return fallback
 }
 
 func (r Router) resolveLoginMode(ctx context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {

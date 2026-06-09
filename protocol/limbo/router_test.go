@@ -407,6 +407,192 @@ func TestProtocol774OnlineModeUsesSessionVerifierProfile(t *testing.T) {
 	}
 }
 
+func TestProtocol774HybridModeFallsBackToOfflineOnInvalidSession(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	gotProof := make(chan limbgo.SessionProof, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Join: func(_ context.Context, session limbgo.PlayerSession, event *limbgo.JoinEvent) error {
+				player := session.Player()
+				if player.LoginMode != limbgo.LoginModeOffline || player.Verified || player.AuthSource != limbgo.AuthSourceOffline {
+					t.Fatalf("join player auth = %+v", player)
+				}
+				if player.Name != "TestPlayer" || player.UUID != limbgo.OfflineUUID("TestPlayer") {
+					t.Fatalf("join player identity = %+v", player)
+				}
+				if event.Player.Name != player.Name || event.Protocol != int(protocol774) {
+					t.Fatalf("join event = %+v", event)
+				}
+				return nil
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginMode:   limbgo.LoginModeHybrid,
+			SessionVerifier: limbgo.SessionVerifierFunc(func(_ context.Context, proof limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				gotProof <- proof
+				return limbgo.VerifiedProfile{}, fmt.Errorf("%w: session not joined", limbgo.ErrInvalidLogin)
+			}),
+		}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	encryptionRequest := assertPacketID(t, reader, protocol774, packetid.StateLogin, "encryption_begin")
+	sharedSecret := []byte("0123456789abcdef")
+	writeEncryptionResponseFromRequest(t, clientConn, protocol774, encryptionRequest.Data, sharedSecret)
+	encryptedConn, err := newEncryptedConn(clientConn, sharedSecret)
+	if err != nil {
+		t.Fatalf("new encrypted conn: %v", err)
+	}
+	encryptedReader := bufio.NewReader(encryptedConn)
+
+	proof := <-gotProof
+	if proof.Username != "TestPlayer" || proof.ProtocolVersion != int(protocol774) || proof.RequestedHost != "localhost" || proof.ServerID == "" {
+		t.Fatalf("proof = %+v", proof)
+	}
+	success := assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "success")
+	assertModernLoginSuccess(t, success.Data, limbgo.OfflineUUID("TestPlayer"), "TestPlayer", 0)
+	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < 4; i++ {
+		assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "position")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	_ = encryptedConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol774HybridModeUsesVerifiedSessionWhenValid(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Join: func(_ context.Context, session limbgo.PlayerSession, _ *limbgo.JoinEvent) error {
+				player := session.Player()
+				if player.LoginMode != limbgo.LoginModeOnline || !player.Verified || player.AuthSource != "test-verifier" {
+					t.Fatalf("join player auth = %+v", player)
+				}
+				if player.Name != "PremiumName" || player.UUID != "12345678-1234-1234-1234-1234567890ab" {
+					t.Fatalf("join player identity = %+v", player)
+				}
+				return nil
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginMode:   limbgo.LoginModeHybrid,
+			SessionVerifier: limbgo.SessionVerifierFunc(func(_ context.Context, _ limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				return limbgo.VerifiedProfile{
+					UUID:       "12345678-1234-1234-1234-1234567890ab",
+					Name:       "PremiumName",
+					Source:     "test-verifier",
+					Verified:   true,
+					Properties: []limbgo.ProfileProperty{{Name: "textures", Value: "texture-value", Signature: "texture-signature"}},
+				}, nil
+			}),
+		}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	encryptionRequest := assertPacketID(t, reader, protocol774, packetid.StateLogin, "encryption_begin")
+	sharedSecret := []byte("0123456789abcdef")
+	writeEncryptionResponseFromRequest(t, clientConn, protocol774, encryptionRequest.Data, sharedSecret)
+	encryptedConn, err := newEncryptedConn(clientConn, sharedSecret)
+	if err != nil {
+		t.Fatalf("new encrypted conn: %v", err)
+	}
+	encryptedReader := bufio.NewReader(encryptedConn)
+
+	success := assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "success")
+	assertModernLoginSuccess(t, success.Data, "12345678-1234-1234-1234-1234567890ab", "PremiumName", 1)
+	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < 4; i++ {
+		assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "position")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	_ = encryptedConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol774HybridModeRejectsSessionVerifierOutage(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginMode:   limbgo.LoginModeHybrid,
+			SessionVerifier: limbgo.SessionVerifierFunc(func(_ context.Context, _ limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				return limbgo.VerifiedProfile{}, fmt.Errorf("%w: all routes failed", limbgo.ErrSessionUnavailable)
+			}),
+		}.ServeConn(context.Background(), serverConn, testServices{
+			spawn: limbgo.SpawnTarget{World: "spawn", Position: limbgo.Vec3{X: 0, Y: 64, Z: 0}},
+			world: testWorld(),
+		})
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	encryptionRequest := assertPacketID(t, reader, protocol774, packetid.StateLogin, "encryption_begin")
+	sharedSecret := []byte("0123456789abcdef")
+	writeEncryptionResponseFromRequest(t, clientConn, protocol774, encryptionRequest.Data, sharedSecret)
+	encryptedConn, err := newEncryptedConn(clientConn, sharedSecret)
+	if err != nil {
+		t.Fatalf("new encrypted conn: %v", err)
+	}
+	encryptedReader := bufio.NewReader(encryptedConn)
+	assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "disconnect")
+
+	if err := <-errCh; !errors.Is(err, limbgo.ErrSessionUnavailable) {
+		t.Fatalf("router error = %v, want ErrSessionUnavailable", err)
+	}
+}
+
 func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 
