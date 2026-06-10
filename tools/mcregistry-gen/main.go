@@ -32,16 +32,10 @@ const (
 	nbtLongArray byte = 12
 )
 
-var wantedEntries = map[string][]string{
+var preferredEntries = map[string][]string{
 	"minecraft:worldgen/biome": {"minecraft:plains"},
 	"minecraft:chat_type":      {"minecraft:chat"},
 	"minecraft:damage_type":    {"minecraft:generic"},
-}
-
-var registryOrder = []string{
-	"minecraft:worldgen/biome",
-	"minecraft:chat_type",
-	"minecraft:damage_type",
 }
 
 type versionJSON struct {
@@ -229,8 +223,17 @@ func readLoginRegistries(path string) ([]generatedRegistry, []byte, []byte, erro
 	if err := json.Unmarshal(login.DimensionCodec, &dimensionCodec); err != nil {
 		return nil, nil, nil, fmt.Errorf("parse %s dimensionCodec: %w", path, err)
 	}
+	var registryIDs []string
+	for registryID := range dimensionCodec {
+		if registryID == "minecraft:dimension_type" {
+			continue
+		}
+		registryIDs = append(registryIDs, registryID)
+	}
+	sort.Strings(registryIDs)
+
 	var registries []generatedRegistry
-	for _, registryID := range registryOrder {
+	for _, registryID := range registryIDs {
 		registry, ok := dimensionCodec[registryID]
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("%s missing registry %s", path, registryID)
@@ -239,23 +242,33 @@ func readLoginRegistries(path string) ([]generatedRegistry, []byte, []byte, erro
 		if generated.ID == "" {
 			generated.ID = registryID
 		}
-		for _, key := range wantedEntries[registryID] {
-			entry, ok := findEntry(registry.Entries, key)
-			if !ok {
-				return nil, nil, nil, fmt.Errorf("%s missing registry entry %s/%s", path, registryID, key)
-			}
-			value, err := encodeAnonymousNBT(entry.Value)
-			if err != nil {
-				return nil, nil, nil, fmt.Errorf("%s encode %s/%s: %w", path, registryID, key, err)
-			}
-			generated.Entries = append(generated.Entries, generatedEntry{
-				Key:   key,
-				Value: value,
-			})
+		entry, err := selectRegistryEntry(registryID, registry.Entries)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("%s %w", path, err)
 		}
+		value, err := encodeAnonymousNBT(entry.Value)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("%s encode %s/%s: %w", path, registryID, entry.Key, err)
+		}
+		generated.Entries = append(generated.Entries, generatedEntry{
+			Key:   entry.Key,
+			Value: value,
+		})
 		registries = append(registries, generated)
 	}
 	return registries, nil, dimension, nil
+}
+
+func selectRegistryEntry(registryID string, entries []entryJSON) (entryJSON, error) {
+	for _, key := range preferredEntries[registryID] {
+		if entry, ok := findEntry(entries, key); ok {
+			return entry, nil
+		}
+	}
+	if len(entries) == 0 {
+		return entryJSON{}, fmt.Errorf("registry %s has no entries", registryID)
+	}
+	return entries[0], nil
 }
 
 func findEntry(entries []entryJSON, key string) (entryJSON, bool) {

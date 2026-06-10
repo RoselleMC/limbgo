@@ -45,6 +45,7 @@ type Router struct {
 	PreventsChatReports *bool
 	ModernProtocols     *ModernProtocols
 	RegistryData        *registrydata.Data
+	ProtocolPolicy      limbgo.ProtocolPolicy
 	LoginMode           limbgo.LoginMode
 	LoginPolicy         limbgo.LoginPolicy
 	SessionVerifier     limbgo.SessionVerifier
@@ -78,11 +79,6 @@ func (r Router) ServeConn(ctx context.Context, conn net.Conn, services limbgo.Se
 }
 
 func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Reader, services limbgo.SessionServices, info handshakeInfo) error {
-	loginStart, err := wire.ReadPacket(reader, 0)
-	if err != nil {
-		return err
-	}
-
 	loginPacketProtocol := info.ProtocolVersion
 	var cfg modernProtocolConfig
 	hasModernConfig := false
@@ -96,6 +92,15 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 			hasModernConfig = true
 			loginPacketProtocol = cfg.packetProtocol()
 		}
+	}
+
+	if err := r.allowProtocol(ctx, conn, loginPacketProtocol, info); err != nil {
+		return err
+	}
+
+	loginStart, err := wire.ReadPacket(reader, 0)
+	if err != nil {
+		return err
 	}
 
 	loginStartID, ok := packetid.ID(loginPacketProtocol, packetid.StateLogin, packetid.ToServer, "login_start")
@@ -168,6 +173,24 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 		}
 		return writeLoginDisconnect(conn, info.ProtocolVersion, "limbgo play support currently implements protocols "+r.supportedPlayProtocols())
 	}
+}
+
+func (r Router) allowProtocol(ctx context.Context, conn net.Conn, packetProtocol int32, info handshakeInfo) error {
+	if r.ProtocolPolicy == nil {
+		return nil
+	}
+	err := r.ProtocolPolicy.AllowProtocol(ctx, limbgo.ProtocolRequest{
+		ProtocolVersion: int(info.ProtocolVersion),
+		RemoteAddr:      conn.RemoteAddr(),
+		RequestedHost:   info.Address,
+	})
+	if err == nil {
+		return nil
+	}
+	if reason, ok := limbgo.ProtocolRejection(err); ok {
+		_ = writeLoginDisconnectComponent(conn, packetProtocol, reason)
+	}
+	return err
 }
 
 func loginDisconnectConn(primary net.Conn, fallback net.Conn) net.Conn {
@@ -370,11 +393,18 @@ func readLoginStartUsername(data []byte) (string, error) {
 }
 
 func writeLoginDisconnect(conn net.Conn, protocol int32, message string) error {
+	return writeLoginDisconnectComponent(conn, protocol, &component.Text{Content: message})
+}
+
+func writeLoginDisconnectComponent(conn net.Conn, protocol int32, reason component.Component) error {
 	id, ok := packetid.ID(protocol, packetid.StateLogin, packetid.ToClient, "disconnect")
 	if !ok {
 		id = 0
 	}
-	payload, err := limbgo.MarshalComponentJSON(protocol, &component.Text{Content: message})
+	if reason == nil {
+		reason = &component.Text{Content: "Disconnected"}
+	}
+	payload, err := limbgo.MarshalComponentJSON(protocol, reason)
 	if err != nil {
 		return err
 	}

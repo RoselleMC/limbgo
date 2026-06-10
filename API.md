@@ -162,6 +162,40 @@ router := limbo.Router{
 unverified. Verified sessions carry the UUID/name/properties returned by the
 configured verifier.
 
+## Protocol Admission
+
+Use `ProtocolPolicy` when an application wants to allow only specific client
+protocol ranges. The policy runs immediately after the Minecraft handshake,
+before the username is parsed and before session authentication starts.
+
+```go
+router := limbo.Router{
+	ProtocolPolicy: limbgo.ProtocolRangePolicy(
+		770,
+		774,
+		&component.Text{Content: "Please use Minecraft 1.21.5-1.21.11"},
+	),
+}
+```
+
+For custom logic, implement `ProtocolPolicy` or use `ProtocolPolicyFunc`:
+
+```go
+router := limbo.Router{
+	ProtocolPolicy: limbgo.ProtocolPolicyFunc(func(ctx context.Context, req limbgo.ProtocolRequest) error {
+		if req.ProtocolVersion < 770 || req.ProtocolVersion > 774 {
+			return limbgo.RejectProtocolText("Unsupported Minecraft version")
+		}
+		return nil
+	}),
+}
+```
+
+`ProtocolRequest` includes `ProtocolVersion`, `RequestedHost`, and
+`RemoteAddr`. Return `RejectProtocol` or `RejectProtocolText` to send a
+client-facing login disconnect reason. Returning any other error aborts the
+connection without treating it as a normal protocol denial.
+
 ## Status And MOTD
 
 For static server-list data, set fields directly on `limbo.Router`:

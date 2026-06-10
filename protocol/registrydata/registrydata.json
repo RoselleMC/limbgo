@@ -2,11 +2,11 @@
   "registries": {
     "766": [
       {
-        "id": "minecraft:worldgen/biome",
+        "id": "minecraft:banner_pattern",
         "entries": [
           {
-            "key": "minecraft:plains",
-            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
           }
         ]
       },
@@ -25,17 +25,53 @@
           {
             "key": "minecraft:generic",
             "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QACAAKaW5ncmVkaWVudAAYbWluZWNyYWZ0OmFtZXRoeXN0X3NoYXJkBQAQaXRlbV9tb2RlbF9pbmRleD+AAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:coast",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6Y29hc3QBAAVkZWNhbAAKAAtkZXNjcmlwdGlvbggACXRyYW5zbGF0ZQAcdHJpbV9wYXR0ZXJuLm1pbmVjcmFmdC5jb2FzdAAIAA10ZW1wbGF0ZV9pdGVtACxtaW5lY3JhZnQ6Y29hc3RfYXJtb3JfdHJpbV9zbWl0aGluZ190ZW1wbGF0ZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CggADWFuZ3J5X3RleHR1cmUAJm1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX2FuZ3J5CAAGYmlvbWVzABVtaW5lY3JhZnQ6c25vd3lfdGFpZ2EIAAx0YW1lX3RleHR1cmUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAx3aWxkX3RleHR1cmUAIG1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:worldgen/biome",
+        "entries": [
+          {
+            "key": "minecraft:plains",
+            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
           }
         ]
       }
     ],
     "767": [
       {
-        "id": "minecraft:worldgen/biome",
+        "id": "minecraft:banner_pattern",
         "entries": [
           {
-            "key": "minecraft:plains",
-            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
           }
         ]
       },
@@ -54,17 +90,80 @@
           {
             "key": "minecraft:generic",
             "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:enchantment",
+        "entries": [
+          {
+            "key": "minecraft:aqua_affinity",
+            "value": "CgMACmFudmlsX2Nvc3QAAAAECgALZGVzY3JpcHRpb24IAAl0cmFuc2xhdGUAI2VuY2hhbnRtZW50Lm1pbmVjcmFmdC5hcXVhX2FmZmluaXR5AAoAB2VmZmVjdHMJABRtaW5lY3JhZnQ6YXR0cmlidXRlcwoAAAABCgAGYW1vdW50BQAEYmFzZUCAAAAFABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3RAgAAACAAEdHlwZQAQbWluZWNyYWZ0OmxpbmVhcgAIAAlhdHRyaWJ1dGUAJ21pbmVjcmFmdDpwbGF5ZXIuc3VibWVyZ2VkX21pbmluZ19zcGVlZAgAAmlkACNtaW5lY3JhZnQ6ZW5jaGFudG1lbnQuYXF1YV9hZmZpbml0eQgACW9wZXJhdGlvbgAUYWRkX211bHRpcGxpZWRfdG90YWwAAAoACG1heF9jb3N0AwAEYmFzZQAAACkDABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3QAAAAAAAMACW1heF9sZXZlbAAAAAEKAAhtaW5fY29zdAMABGJhc2UAAAABAwAVcGVyX2xldmVsX2Fib3ZlX2ZpcnN0AAAAAAAJAAVzbG90cwgAAAABAARoZWFkCAAPc3VwcG9ydGVkX2l0ZW1zACEjbWluZWNyYWZ0OmVuY2hhbnRhYmxlL2hlYWRfYXJtb3IDAAZ3ZWlnaHQAAAACAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:jukebox_song",
+        "entries": [
+          {
+            "key": "minecraft:11",
+            "value": "CgMAEWNvbXBhcmF0b3Jfb3V0cHV0AAAACwoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABlqdWtlYm94X3NvbmcubWluZWNyYWZ0LjExAAUAEWxlbmd0aF9pbl9zZWNvbmRzQo4AAAgAC3NvdW5kX2V2ZW50ABdtaW5lY3JhZnQ6bXVzaWNfZGlzYy4xMQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:painting_variant",
+        "entries": [
+          {
+            "key": "minecraft:alban",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6YWxiYW4DAAZoZWlnaHQAAAABAwAFd2lkdGgAAAABAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QACAAKaW5ncmVkaWVudAAYbWluZWNyYWZ0OmFtZXRoeXN0X3NoYXJkBQAQaXRlbV9tb2RlbF9pbmRleD+AAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:bolt",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6Ym9sdAEABWRlY2FsAAoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABt0cmltX3BhdHRlcm4ubWluZWNyYWZ0LmJvbHQACAANdGVtcGxhdGVfaXRlbQArbWluZWNyYWZ0OmJvbHRfYXJtb3JfdHJpbV9zbWl0aGluZ190ZW1wbGF0ZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CggADWFuZ3J5X3RleHR1cmUAJm1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX2FuZ3J5CAAGYmlvbWVzABVtaW5lY3JhZnQ6c25vd3lfdGFpZ2EIAAx0YW1lX3RleHR1cmUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAx3aWxkX3RleHR1cmUAIG1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:worldgen/biome",
+        "entries": [
+          {
+            "key": "minecraft:plains",
+            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
           }
         ]
       }
     ],
     "768": [
       {
-        "id": "minecraft:worldgen/biome",
+        "id": "minecraft:banner_pattern",
         "entries": [
           {
-            "key": "minecraft:plains",
-            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
           }
         ]
       },
@@ -83,17 +182,89 @@
           {
             "key": "minecraft:generic",
             "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:enchantment",
+        "entries": [
+          {
+            "key": "minecraft:aqua_affinity",
+            "value": "CgMACmFudmlsX2Nvc3QAAAAECgALZGVzY3JpcHRpb24IAAl0cmFuc2xhdGUAI2VuY2hhbnRtZW50Lm1pbmVjcmFmdC5hcXVhX2FmZmluaXR5AAoAB2VmZmVjdHMJABRtaW5lY3JhZnQ6YXR0cmlidXRlcwoAAAABCgAGYW1vdW50BQAEYmFzZUCAAAAFABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3RAgAAACAAEdHlwZQAQbWluZWNyYWZ0OmxpbmVhcgAIAAlhdHRyaWJ1dGUAIG1pbmVjcmFmdDpzdWJtZXJnZWRfbWluaW5nX3NwZWVkCAACaWQAI21pbmVjcmFmdDplbmNoYW50bWVudC5hcXVhX2FmZmluaXR5CAAJb3BlcmF0aW9uABRhZGRfbXVsdGlwbGllZF90b3RhbAAACgAIbWF4X2Nvc3QDAARiYXNlAAAAKQMAFXBlcl9sZXZlbF9hYm92ZV9maXJzdAAAAAAAAwAJbWF4X2xldmVsAAAAAQoACG1pbl9jb3N0AwAEYmFzZQAAAAEDABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3QAAAAAAAkABXNsb3RzCAAAAAEABGhlYWQIAA9zdXBwb3J0ZWRfaXRlbXMAISNtaW5lY3JhZnQ6ZW5jaGFudGFibGUvaGVhZF9hcm1vcgMABndlaWdodAAAAAIA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:instrument",
+        "entries": [
+          {
+            "key": "minecraft:admire_goat_horn",
+            "value": "CgoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlACVpbnN0cnVtZW50Lm1pbmVjcmFmdC5hZG1pcmVfZ29hdF9ob3JuAAUABXJhbmdlQ4AAAAgAC3NvdW5kX2V2ZW50ACBtaW5lY3JhZnQ6aXRlbS5nb2F0X2hvcm4uc291bmQuNAUADHVzZV9kdXJhdGlvbkDgAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:jukebox_song",
+        "entries": [
+          {
+            "key": "minecraft:11",
+            "value": "CgMAEWNvbXBhcmF0b3Jfb3V0cHV0AAAACwoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABlqdWtlYm94X3NvbmcubWluZWNyYWZ0LjExAAUAEWxlbmd0aF9pbl9zZWNvbmRzQo4AAAgAC3NvdW5kX2V2ZW50ABdtaW5lY3JhZnQ6bXVzaWNfZGlzYy4xMQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:painting_variant",
+        "entries": [
+          {
+            "key": "minecraft:alban",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6YWxiYW4KAAZhdXRob3IIAAVjb2xvcgAEZ3JheQgACXRyYW5zbGF0ZQAfcGFpbnRpbmcubWluZWNyYWZ0LmFsYmFuLmF1dGhvcgADAAZoZWlnaHQAAAABCgAFdGl0bGUIAAVjb2xvcgAGeWVsbG93CAAJdHJhbnNsYXRlAB5wYWludGluZy5taW5lY3JhZnQuYWxiYW4udGl0bGUAAwAFd2lkdGgAAAABAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QACAAKaW5ncmVkaWVudAAYbWluZWNyYWZ0OmFtZXRoeXN0X3NoYXJkBQAQaXRlbV9tb2RlbF9pbmRleD+AAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:bolt",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6Ym9sdAEABWRlY2FsAAoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABt0cmltX3BhdHRlcm4ubWluZWNyYWZ0LmJvbHQACAANdGVtcGxhdGVfaXRlbQArbWluZWNyYWZ0OmJvbHRfYXJtb3JfdHJpbV9zbWl0aGluZ190ZW1wbGF0ZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CggADWFuZ3J5X3RleHR1cmUAJm1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX2FuZ3J5CAAGYmlvbWVzABVtaW5lY3JhZnQ6c25vd3lfdGFpZ2EIAAx0YW1lX3RleHR1cmUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAx3aWxkX3RleHR1cmUAIG1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:worldgen/biome",
+        "entries": [
+          {
+            "key": "minecraft:plains",
+            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
           }
         ]
       }
     ],
     "769": [
       {
-        "id": "minecraft:worldgen/biome",
+        "id": "minecraft:banner_pattern",
         "entries": [
           {
-            "key": "minecraft:plains",
-            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
           }
         ]
       },
@@ -112,17 +283,89 @@
           {
             "key": "minecraft:generic",
             "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:enchantment",
+        "entries": [
+          {
+            "key": "minecraft:aqua_affinity",
+            "value": "CgMACmFudmlsX2Nvc3QAAAAECgALZGVzY3JpcHRpb24IAAl0cmFuc2xhdGUAI2VuY2hhbnRtZW50Lm1pbmVjcmFmdC5hcXVhX2FmZmluaXR5AAoAB2VmZmVjdHMJABRtaW5lY3JhZnQ6YXR0cmlidXRlcwoAAAABCgAGYW1vdW50BQAEYmFzZUCAAAAFABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3RAgAAACAAEdHlwZQAQbWluZWNyYWZ0OmxpbmVhcgAIAAlhdHRyaWJ1dGUAIG1pbmVjcmFmdDpzdWJtZXJnZWRfbWluaW5nX3NwZWVkCAACaWQAI21pbmVjcmFmdDplbmNoYW50bWVudC5hcXVhX2FmZmluaXR5CAAJb3BlcmF0aW9uABRhZGRfbXVsdGlwbGllZF90b3RhbAAACgAIbWF4X2Nvc3QDAARiYXNlAAAAKQMAFXBlcl9sZXZlbF9hYm92ZV9maXJzdAAAAAAAAwAJbWF4X2xldmVsAAAAAQoACG1pbl9jb3N0AwAEYmFzZQAAAAEDABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3QAAAAAAAkABXNsb3RzCAAAAAEABGhlYWQIAA9zdXBwb3J0ZWRfaXRlbXMAISNtaW5lY3JhZnQ6ZW5jaGFudGFibGUvaGVhZF9hcm1vcgMABndlaWdodAAAAAIA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:instrument",
+        "entries": [
+          {
+            "key": "minecraft:admire_goat_horn",
+            "value": "CgoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlACVpbnN0cnVtZW50Lm1pbmVjcmFmdC5hZG1pcmVfZ29hdF9ob3JuAAUABXJhbmdlQ4AAAAgAC3NvdW5kX2V2ZW50ACBtaW5lY3JhZnQ6aXRlbS5nb2F0X2hvcm4uc291bmQuNAUADHVzZV9kdXJhdGlvbkDgAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:jukebox_song",
+        "entries": [
+          {
+            "key": "minecraft:11",
+            "value": "CgMAEWNvbXBhcmF0b3Jfb3V0cHV0AAAACwoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABlqdWtlYm94X3NvbmcubWluZWNyYWZ0LjExAAUAEWxlbmd0aF9pbl9zZWNvbmRzQo4AAAgAC3NvdW5kX2V2ZW50ABdtaW5lY3JhZnQ6bXVzaWNfZGlzYy4xMQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:painting_variant",
+        "entries": [
+          {
+            "key": "minecraft:alban",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6YWxiYW4KAAZhdXRob3IIAAVjb2xvcgAEZ3JheQgACXRyYW5zbGF0ZQAfcGFpbnRpbmcubWluZWNyYWZ0LmFsYmFuLmF1dGhvcgADAAZoZWlnaHQAAAABCgAFdGl0bGUIAAVjb2xvcgAGeWVsbG93CAAJdHJhbnNsYXRlAB5wYWludGluZy5taW5lY3JhZnQuYWxiYW4udGl0bGUAAwAFd2lkdGgAAAABAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QACAAKaW5ncmVkaWVudAAYbWluZWNyYWZ0OmFtZXRoeXN0X3NoYXJkBQAQaXRlbV9tb2RlbF9pbmRleD+AAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:bolt",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6Ym9sdAEABWRlY2FsAAoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABt0cmltX3BhdHRlcm4ubWluZWNyYWZ0LmJvbHQACAANdGVtcGxhdGVfaXRlbQArbWluZWNyYWZ0OmJvbHRfYXJtb3JfdHJpbV9zbWl0aGluZ190ZW1wbGF0ZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CggADWFuZ3J5X3RleHR1cmUAJm1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX2FuZ3J5CAAGYmlvbWVzABVtaW5lY3JhZnQ6c25vd3lfdGFpZ2EIAAx0YW1lX3RleHR1cmUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAx3aWxkX3RleHR1cmUAIG1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:worldgen/biome",
+        "entries": [
+          {
+            "key": "minecraft:plains",
+            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
           }
         ]
       }
     ],
     "770": [
       {
-        "id": "minecraft:worldgen/biome",
+        "id": "minecraft:banner_pattern",
         "entries": [
           {
-            "key": "minecraft:plains",
-            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
           }
         ]
       },
@@ -141,17 +384,89 @@
           {
             "key": "minecraft:generic",
             "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:enchantment",
+        "entries": [
+          {
+            "key": "minecraft:aqua_affinity",
+            "value": "CgMACmFudmlsX2Nvc3QAAAAECgALZGVzY3JpcHRpb24IAAl0cmFuc2xhdGUAI2VuY2hhbnRtZW50Lm1pbmVjcmFmdC5hcXVhX2FmZmluaXR5AAoAB2VmZmVjdHMJABRtaW5lY3JhZnQ6YXR0cmlidXRlcwoAAAABCgAGYW1vdW50BQAEYmFzZUCAAAAFABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3RAgAAACAAEdHlwZQAQbWluZWNyYWZ0OmxpbmVhcgAIAAlhdHRyaWJ1dGUAIG1pbmVjcmFmdDpzdWJtZXJnZWRfbWluaW5nX3NwZWVkCAACaWQAI21pbmVjcmFmdDplbmNoYW50bWVudC5hcXVhX2FmZmluaXR5CAAJb3BlcmF0aW9uABRhZGRfbXVsdGlwbGllZF90b3RhbAAACgAIbWF4X2Nvc3QDAARiYXNlAAAAKQMAFXBlcl9sZXZlbF9hYm92ZV9maXJzdAAAAAAAAwAJbWF4X2xldmVsAAAAAQoACG1pbl9jb3N0AwAEYmFzZQAAAAEDABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3QAAAAAAAkABXNsb3RzCAAAAAEABGhlYWQIAA9zdXBwb3J0ZWRfaXRlbXMAISNtaW5lY3JhZnQ6ZW5jaGFudGFibGUvaGVhZF9hcm1vcgMABndlaWdodAAAAAIA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:instrument",
+        "entries": [
+          {
+            "key": "minecraft:admire_goat_horn",
+            "value": "CgoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlACVpbnN0cnVtZW50Lm1pbmVjcmFmdC5hZG1pcmVfZ29hdF9ob3JuAAUABXJhbmdlQ4AAAAgAC3NvdW5kX2V2ZW50ACBtaW5lY3JhZnQ6aXRlbS5nb2F0X2hvcm4uc291bmQuNAUADHVzZV9kdXJhdGlvbkDgAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:jukebox_song",
+        "entries": [
+          {
+            "key": "minecraft:11",
+            "value": "CgMAEWNvbXBhcmF0b3Jfb3V0cHV0AAAACwoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABlqdWtlYm94X3NvbmcubWluZWNyYWZ0LjExAAUAEWxlbmd0aF9pbl9zZWNvbmRzQo4AAAgAC3NvdW5kX2V2ZW50ABdtaW5lY3JhZnQ6bXVzaWNfZGlzYy4xMQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:painting_variant",
+        "entries": [
+          {
+            "key": "minecraft:alban",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6YWxiYW4KAAZhdXRob3IIAAVjb2xvcgAEZ3JheQgACXRyYW5zbGF0ZQAfcGFpbnRpbmcubWluZWNyYWZ0LmFsYmFuLmF1dGhvcgADAAZoZWlnaHQAAAABCgAFdGl0bGUIAAVjb2xvcgAGeWVsbG93CAAJdHJhbnNsYXRlAB5wYWludGluZy5taW5lY3JhZnQuYWxiYW4udGl0bGUAAwAFd2lkdGgAAAABAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QACAAKaW5ncmVkaWVudAAYbWluZWNyYWZ0OmFtZXRoeXN0X3NoYXJkBQAQaXRlbV9tb2RlbF9pbmRleD+AAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:bolt",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6Ym9sdAEABWRlY2FsAAoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABt0cmltX3BhdHRlcm4ubWluZWNyYWZ0LmJvbHQACAANdGVtcGxhdGVfaXRlbQArbWluZWNyYWZ0OmJvbHRfYXJtb3JfdHJpbV9zbWl0aGluZ190ZW1wbGF0ZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CggADWFuZ3J5X3RleHR1cmUAJm1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX2FuZ3J5CAAGYmlvbWVzABVtaW5lY3JhZnQ6c25vd3lfdGFpZ2EIAAx0YW1lX3RleHR1cmUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAx3aWxkX3RleHR1cmUAIG1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:worldgen/biome",
+        "entries": [
+          {
+            "key": "minecraft:plains",
+            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
           }
         ]
       }
     ],
     "771": [
       {
-        "id": "minecraft:worldgen/biome",
+        "id": "minecraft:banner_pattern",
         "entries": [
           {
-            "key": "minecraft:plains",
-            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
           }
         ]
       },
@@ -170,17 +485,89 @@
           {
             "key": "minecraft:generic",
             "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:enchantment",
+        "entries": [
+          {
+            "key": "minecraft:aqua_affinity",
+            "value": "CgMACmFudmlsX2Nvc3QAAAAECgALZGVzY3JpcHRpb24IAAl0cmFuc2xhdGUAI2VuY2hhbnRtZW50Lm1pbmVjcmFmdC5hcXVhX2FmZmluaXR5AAoAB2VmZmVjdHMJABRtaW5lY3JhZnQ6YXR0cmlidXRlcwoAAAABCgAGYW1vdW50BQAEYmFzZUCAAAAFABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3RAgAAACAAEdHlwZQAQbWluZWNyYWZ0OmxpbmVhcgAIAAlhdHRyaWJ1dGUAIG1pbmVjcmFmdDpzdWJtZXJnZWRfbWluaW5nX3NwZWVkCAACaWQAI21pbmVjcmFmdDplbmNoYW50bWVudC5hcXVhX2FmZmluaXR5CAAJb3BlcmF0aW9uABRhZGRfbXVsdGlwbGllZF90b3RhbAAACgAIbWF4X2Nvc3QDAARiYXNlAAAAKQMAFXBlcl9sZXZlbF9hYm92ZV9maXJzdAAAAAAAAwAJbWF4X2xldmVsAAAAAQoACG1pbl9jb3N0AwAEYmFzZQAAAAEDABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3QAAAAAAAkABXNsb3RzCAAAAAEABGhlYWQIAA9zdXBwb3J0ZWRfaXRlbXMAISNtaW5lY3JhZnQ6ZW5jaGFudGFibGUvaGVhZF9hcm1vcgMABndlaWdodAAAAAIA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:instrument",
+        "entries": [
+          {
+            "key": "minecraft:admire_goat_horn",
+            "value": "CgoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlACVpbnN0cnVtZW50Lm1pbmVjcmFmdC5hZG1pcmVfZ29hdF9ob3JuAAUABXJhbmdlQ4AAAAgAC3NvdW5kX2V2ZW50ACBtaW5lY3JhZnQ6aXRlbS5nb2F0X2hvcm4uc291bmQuNAUADHVzZV9kdXJhdGlvbkDgAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:jukebox_song",
+        "entries": [
+          {
+            "key": "minecraft:11",
+            "value": "CgMAEWNvbXBhcmF0b3Jfb3V0cHV0AAAACwoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABlqdWtlYm94X3NvbmcubWluZWNyYWZ0LjExAAUAEWxlbmd0aF9pbl9zZWNvbmRzQo4AAAgAC3NvdW5kX2V2ZW50ABdtaW5lY3JhZnQ6bXVzaWNfZGlzYy4xMQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:painting_variant",
+        "entries": [
+          {
+            "key": "minecraft:alban",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6YWxiYW4KAAZhdXRob3IIAAVjb2xvcgAEZ3JheQgACXRyYW5zbGF0ZQAfcGFpbnRpbmcubWluZWNyYWZ0LmFsYmFuLmF1dGhvcgADAAZoZWlnaHQAAAABCgAFdGl0bGUIAAVjb2xvcgAGeWVsbG93CAAJdHJhbnNsYXRlAB5wYWludGluZy5taW5lY3JhZnQuYWxiYW4udGl0bGUAAwAFd2lkdGgAAAABAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QACAAKaW5ncmVkaWVudAAYbWluZWNyYWZ0OmFtZXRoeXN0X3NoYXJkBQAQaXRlbV9tb2RlbF9pbmRleD+AAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:bolt",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6Ym9sdAEABWRlY2FsAAoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABt0cmltX3BhdHRlcm4ubWluZWNyYWZ0LmJvbHQACAANdGVtcGxhdGVfaXRlbQArbWluZWNyYWZ0OmJvbHRfYXJtb3JfdHJpbV9zbWl0aGluZ190ZW1wbGF0ZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CggADWFuZ3J5X3RleHR1cmUAJm1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX2FuZ3J5CAAGYmlvbWVzABVtaW5lY3JhZnQ6c25vd3lfdGFpZ2EIAAx0YW1lX3RleHR1cmUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAx3aWxkX3RleHR1cmUAIG1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:worldgen/biome",
+        "entries": [
+          {
+            "key": "minecraft:plains",
+            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
           }
         ]
       }
     ],
     "772": [
       {
-        "id": "minecraft:worldgen/biome",
+        "id": "minecraft:banner_pattern",
         "entries": [
           {
-            "key": "minecraft:plains",
-            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
           }
         ]
       },
@@ -199,17 +586,89 @@
           {
             "key": "minecraft:generic",
             "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:enchantment",
+        "entries": [
+          {
+            "key": "minecraft:aqua_affinity",
+            "value": "CgMACmFudmlsX2Nvc3QAAAAECgALZGVzY3JpcHRpb24IAAl0cmFuc2xhdGUAI2VuY2hhbnRtZW50Lm1pbmVjcmFmdC5hcXVhX2FmZmluaXR5AAoAB2VmZmVjdHMJABRtaW5lY3JhZnQ6YXR0cmlidXRlcwoAAAABCgAGYW1vdW50BQAEYmFzZUCAAAAFABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3RAgAAACAAEdHlwZQAQbWluZWNyYWZ0OmxpbmVhcgAIAAlhdHRyaWJ1dGUAIG1pbmVjcmFmdDpzdWJtZXJnZWRfbWluaW5nX3NwZWVkCAACaWQAI21pbmVjcmFmdDplbmNoYW50bWVudC5hcXVhX2FmZmluaXR5CAAJb3BlcmF0aW9uABRhZGRfbXVsdGlwbGllZF90b3RhbAAACgAIbWF4X2Nvc3QDAARiYXNlAAAAKQMAFXBlcl9sZXZlbF9hYm92ZV9maXJzdAAAAAAAAwAJbWF4X2xldmVsAAAAAQoACG1pbl9jb3N0AwAEYmFzZQAAAAEDABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3QAAAAAAAkABXNsb3RzCAAAAAEABGhlYWQIAA9zdXBwb3J0ZWRfaXRlbXMAISNtaW5lY3JhZnQ6ZW5jaGFudGFibGUvaGVhZF9hcm1vcgMABndlaWdodAAAAAIA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:instrument",
+        "entries": [
+          {
+            "key": "minecraft:admire_goat_horn",
+            "value": "CgoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlACVpbnN0cnVtZW50Lm1pbmVjcmFmdC5hZG1pcmVfZ29hdF9ob3JuAAUABXJhbmdlQ4AAAAgAC3NvdW5kX2V2ZW50ACBtaW5lY3JhZnQ6aXRlbS5nb2F0X2hvcm4uc291bmQuNAUADHVzZV9kdXJhdGlvbkDgAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:jukebox_song",
+        "entries": [
+          {
+            "key": "minecraft:11",
+            "value": "CgMAEWNvbXBhcmF0b3Jfb3V0cHV0AAAACwoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABlqdWtlYm94X3NvbmcubWluZWNyYWZ0LjExAAUAEWxlbmd0aF9pbl9zZWNvbmRzQo4AAAgAC3NvdW5kX2V2ZW50ABdtaW5lY3JhZnQ6bXVzaWNfZGlzYy4xMQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:painting_variant",
+        "entries": [
+          {
+            "key": "minecraft:alban",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6YWxiYW4KAAZhdXRob3IIAAVjb2xvcgAEZ3JheQgACXRyYW5zbGF0ZQAfcGFpbnRpbmcubWluZWNyYWZ0LmFsYmFuLmF1dGhvcgADAAZoZWlnaHQAAAABCgAFdGl0bGUIAAVjb2xvcgAGeWVsbG93CAAJdHJhbnNsYXRlAB5wYWludGluZy5taW5lY3JhZnQuYWxiYW4udGl0bGUAAwAFd2lkdGgAAAABAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QACAAKaW5ncmVkaWVudAAYbWluZWNyYWZ0OmFtZXRoeXN0X3NoYXJkBQAQaXRlbV9tb2RlbF9pbmRleD+AAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:bolt",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6Ym9sdAEABWRlY2FsAAoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABt0cmltX3BhdHRlcm4ubWluZWNyYWZ0LmJvbHQACAANdGVtcGxhdGVfaXRlbQArbWluZWNyYWZ0OmJvbHRfYXJtb3JfdHJpbV9zbWl0aGluZ190ZW1wbGF0ZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CggADWFuZ3J5X3RleHR1cmUAJm1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX2FuZ3J5CAAGYmlvbWVzABVtaW5lY3JhZnQ6c25vd3lfdGFpZ2EIAAx0YW1lX3RleHR1cmUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAx3aWxkX3RleHR1cmUAIG1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:worldgen/biome",
+        "entries": [
+          {
+            "key": "minecraft:plains",
+            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
           }
         ]
       }
     ],
     "773": [
       {
-        "id": "minecraft:worldgen/biome",
+        "id": "minecraft:banner_pattern",
         "entries": [
           {
-            "key": "minecraft:plains",
-            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
           }
         ]
       },
@@ -230,9 +689,252 @@
             "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
           }
         ]
+      },
+      {
+        "id": "minecraft:enchantment",
+        "entries": [
+          {
+            "key": "minecraft:aqua_affinity",
+            "value": "CgMACmFudmlsX2Nvc3QAAAAECgALZGVzY3JpcHRpb24IAAl0cmFuc2xhdGUAI2VuY2hhbnRtZW50Lm1pbmVjcmFmdC5hcXVhX2FmZmluaXR5AAoAB2VmZmVjdHMJABRtaW5lY3JhZnQ6YXR0cmlidXRlcwoAAAABCgAGYW1vdW50BQAEYmFzZUCAAAAFABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3RAgAAACAAEdHlwZQAQbWluZWNyYWZ0OmxpbmVhcgAIAAlhdHRyaWJ1dGUAJ21pbmVjcmFmdDpwbGF5ZXIuc3VibWVyZ2VkX21pbmluZ19zcGVlZAgAAmlkACNtaW5lY3JhZnQ6ZW5jaGFudG1lbnQuYXF1YV9hZmZpbml0eQgACW9wZXJhdGlvbgAUYWRkX211bHRpcGxpZWRfdG90YWwAAAoACG1heF9jb3N0AwAEYmFzZQAAACkDABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3QAAAAAAAMACW1heF9sZXZlbAAAAAEKAAhtaW5fY29zdAMABGJhc2UAAAABAwAVcGVyX2xldmVsX2Fib3ZlX2ZpcnN0AAAAAAAJAAVzbG90cwgAAAABAARoZWFkCAAPc3VwcG9ydGVkX2l0ZW1zACEjbWluZWNyYWZ0OmVuY2hhbnRhYmxlL2hlYWRfYXJtb3IDAAZ3ZWlnaHQAAAACAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:jukebox_song",
+        "entries": [
+          {
+            "key": "minecraft:11",
+            "value": "CgMAEWNvbXBhcmF0b3Jfb3V0cHV0AAAACwoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABlqdWtlYm94X3NvbmcubWluZWNyYWZ0LjExAAUAEWxlbmd0aF9pbl9zZWNvbmRzQo4AAAgAC3NvdW5kX2V2ZW50ABdtaW5lY3JhZnQ6bXVzaWNfZGlzYy4xMQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:painting_variant",
+        "entries": [
+          {
+            "key": "minecraft:alban",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6YWxiYW4DAAZoZWlnaHQAAAABAwAFd2lkdGgAAAABAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QACAAKaW5ncmVkaWVudAAYbWluZWNyYWZ0OmFtZXRoeXN0X3NoYXJkBQAQaXRlbV9tb2RlbF9pbmRleD+AAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:bolt",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6Ym9sdAEABWRlY2FsAAoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABt0cmltX3BhdHRlcm4ubWluZWNyYWZ0LmJvbHQACAANdGVtcGxhdGVfaXRlbQArbWluZWNyYWZ0OmJvbHRfYXJtb3JfdHJpbV9zbWl0aGluZ190ZW1wbGF0ZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CggADWFuZ3J5X3RleHR1cmUAJm1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX2FuZ3J5CAAGYmlvbWVzABVtaW5lY3JhZnQ6c25vd3lfdGFpZ2EIAAx0YW1lX3RleHR1cmUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAx3aWxkX3RleHR1cmUAIG1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:worldgen/biome",
+        "entries": [
+          {
+            "key": "minecraft:plains",
+            "value": "CgUACGRvd25mYWxsPszMzQoAB2VmZmVjdHMDAAlmb2dfY29sb3IAwNj/CgAKbW9vZF9zb3VuZAMAE2Jsb2NrX3NlYXJjaF9leHRlbnQAAAAIBgAGb2Zmc2V0QAAAAAAAAAAIAAVzb3VuZAAWbWluZWNyYWZ0OmFtYmllbnQuY2F2ZQMACnRpY2tfZGVsYXkAABdwAAMACXNreV9jb2xvcgB4p/8DAAt3YXRlcl9jb2xvcgA/duQDAA93YXRlcl9mb2dfY29sb3IABQUzAAEAEWhhc19wcmVjaXBpdGF0aW9uAQUAC3RlbXBlcmF0dXJlP0zMzQA="
+          }
+        ]
       }
     ],
     "774": [
+      {
+        "id": "minecraft:banner_pattern",
+        "entries": [
+          {
+            "key": "minecraft:base",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6YmFzZQgAD3RyYW5zbGF0aW9uX2tleQAbYmxvY2subWluZWNyYWZ0LmJhbm5lci5iYXNlAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:cat_variant",
+        "entries": [
+          {
+            "key": "minecraft:all_black",
+            "value": "CggACGFzc2V0X2lkAB5taW5lY3JhZnQ6ZW50aXR5L2NhdC9hbGxfYmxhY2sA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:chat_type",
+        "entries": [
+          {
+            "key": "minecraft:chat",
+            "value": "CgoABGNoYXQJAApwYXJhbWV0ZXJzCAAAAAIABnNlbmRlcgAHY29udGVudAgAD3RyYW5zbGF0aW9uX2tleQAOY2hhdC50eXBlLnRleHQACgAJbmFycmF0aW9uCQAKcGFyYW1ldGVycwgAAAACAAZzZW5kZXIAB2NvbnRlbnQIAA90cmFuc2xhdGlvbl9rZXkAFmNoYXQudHlwZS50ZXh0Lm5hcnJhdGUAAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:chicken_variant",
+        "entries": [
+          {
+            "key": "minecraft:cold",
+            "value": "CggACGFzc2V0X2lkACVtaW5lY3JhZnQ6ZW50aXR5L2NoaWNrZW4vY29sZF9jaGlja2VuCAAFbW9kZWwABGNvbGQA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:cow_variant",
+        "entries": [
+          {
+            "key": "minecraft:cold",
+            "value": "CggACGFzc2V0X2lkAB1taW5lY3JhZnQ6ZW50aXR5L2Nvdy9jb2xkX2NvdwgABW1vZGVsAARjb2xkAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:damage_type",
+        "entries": [
+          {
+            "key": "minecraft:generic",
+            "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:dialog",
+        "entries": [
+          {
+            "key": "minecraft:custom_options",
+            "value": "CgMADGJ1dHRvbl93aWR0aAAAATYDAAdjb2x1bW5zAAAAAQgAB2RpYWxvZ3MAISNtaW5lY3JhZnQ6cGF1c2Vfc2NyZWVuX2FkZGl0aW9ucwoAC2V4aXRfYWN0aW9uCgAFbGFiZWwIAAl0cmFuc2xhdGUACGd1aS5iYWNrAAMABXdpZHRoAAAAyAAKAA5leHRlcm5hbF90aXRsZQgACXRyYW5zbGF0ZQATbWVudS5jdXN0b21fb3B0aW9ucwAKAAV0aXRsZQgACXRyYW5zbGF0ZQAZbWVudS5jdXN0b21fb3B0aW9ucy50aXRsZQAIAAR0eXBlABVtaW5lY3JhZnQ6ZGlhbG9nX2xpc3QA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:enchantment",
+        "entries": [
+          {
+            "key": "minecraft:aqua_affinity",
+            "value": "CgMACmFudmlsX2Nvc3QAAAAECgALZGVzY3JpcHRpb24IAAl0cmFuc2xhdGUAI2VuY2hhbnRtZW50Lm1pbmVjcmFmdC5hcXVhX2FmZmluaXR5AAoAB2VmZmVjdHMJABRtaW5lY3JhZnQ6YXR0cmlidXRlcwoAAAABCgAGYW1vdW50BQAEYmFzZUCAAAAFABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3RAgAAACAAEdHlwZQAQbWluZWNyYWZ0OmxpbmVhcgAIAAlhdHRyaWJ1dGUAIG1pbmVjcmFmdDpzdWJtZXJnZWRfbWluaW5nX3NwZWVkCAACaWQAI21pbmVjcmFmdDplbmNoYW50bWVudC5hcXVhX2FmZmluaXR5CAAJb3BlcmF0aW9uABRhZGRfbXVsdGlwbGllZF90b3RhbAAACgAIbWF4X2Nvc3QDAARiYXNlAAAAKQMAFXBlcl9sZXZlbF9hYm92ZV9maXJzdAAAAAAAAwAJbWF4X2xldmVsAAAAAQoACG1pbl9jb3N0AwAEYmFzZQAAAAEDABVwZXJfbGV2ZWxfYWJvdmVfZmlyc3QAAAAAAAkABXNsb3RzCAAAAAEABGhlYWQIAA9zdXBwb3J0ZWRfaXRlbXMAISNtaW5lY3JhZnQ6ZW5jaGFudGFibGUvaGVhZF9hcm1vcgMABndlaWdodAAAAAIA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:frog_variant",
+        "entries": [
+          {
+            "key": "minecraft:cold",
+            "value": "CggACGFzc2V0X2lkAB9taW5lY3JhZnQ6ZW50aXR5L2Zyb2cvY29sZF9mcm9nAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:instrument",
+        "entries": [
+          {
+            "key": "minecraft:admire_goat_horn",
+            "value": "CgoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlACVpbnN0cnVtZW50Lm1pbmVjcmFmdC5hZG1pcmVfZ29hdF9ob3JuAAUABXJhbmdlQ4AAAAgAC3NvdW5kX2V2ZW50ACBtaW5lY3JhZnQ6aXRlbS5nb2F0X2hvcm4uc291bmQuNAUADHVzZV9kdXJhdGlvbkDgAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:jukebox_song",
+        "entries": [
+          {
+            "key": "minecraft:11",
+            "value": "CgMAEWNvbXBhcmF0b3Jfb3V0cHV0AAAACwoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABlqdWtlYm94X3NvbmcubWluZWNyYWZ0LjExAAUAEWxlbmd0aF9pbl9zZWNvbmRzQo4AAAgAC3NvdW5kX2V2ZW50ABdtaW5lY3JhZnQ6bXVzaWNfZGlzYy4xMQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:painting_variant",
+        "entries": [
+          {
+            "key": "minecraft:alban",
+            "value": "CggACGFzc2V0X2lkAA9taW5lY3JhZnQ6YWxiYW4KAAZhdXRob3IIAAVjb2xvcgAEZ3JheQgACXRyYW5zbGF0ZQAfcGFpbnRpbmcubWluZWNyYWZ0LmFsYmFuLmF1dGhvcgADAAZoZWlnaHQAAAABCgAFdGl0bGUIAAVjb2xvcgAGeWVsbG93CAAJdHJhbnNsYXRlAB5wYWludGluZy5taW5lY3JhZnQuYWxiYW4udGl0bGUAAwAFd2lkdGgAAAABAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:pig_variant",
+        "entries": [
+          {
+            "key": "minecraft:cold",
+            "value": "CggACGFzc2V0X2lkAB1taW5lY3JhZnQ6ZW50aXR5L3BpZy9jb2xkX3BpZwgABW1vZGVsAARjb2xkAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:test_environment",
+        "entries": [
+          {
+            "key": "minecraft:default",
+            "value": "CgkAC2RlZmluaXRpb25zAAAAAAAIAAR0eXBlABBtaW5lY3JhZnQ6YWxsX29mAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:test_instance",
+        "entries": [
+          {
+            "key": "minecraft:always_pass",
+            "value": "CggAC2Vudmlyb25tZW50ABFtaW5lY3JhZnQ6ZGVmYXVsdAgACGZ1bmN0aW9uABVtaW5lY3JhZnQ6YWx3YXlzX3Bhc3MDAAltYXhfdGlja3MAAAABAQAIcmVxdWlyZWQAAwALc2V0dXBfdGlja3MAAAABCAAJc3RydWN0dXJlAA9taW5lY3JhZnQ6ZW1wdHkIAAR0eXBlABJtaW5lY3JhZnQ6ZnVuY3Rpb24A"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:timeline",
+        "entries": [
+          {
+            "key": "minecraft:day",
+            "value": "CgMADHBlcmlvZF90aWNrcwAAXcAKAAZ0cmFja3MKACNtaW5lY3JhZnQ6YXVkaW8vZmlyZWZseV9idXNoX3NvdW5kcwkACWtleWZyYW1lcwoAAAACAwAFdGlja3MAADE4AQAFdmFsdWUBAAMABXRpY2tzAABbaQEABXZhbHVlAAAIAAhtb2RpZmllcgACb3IACgAibWluZWNyYWZ0OmdhbWVwbGF5L2NyZWFraW5nX2FjdGl2ZQkACWtleWZyYW1lcwoAAAACAwAFdGlja3MAADE4AQAFdmFsdWUBAAMABXRpY2tzAABbaQEABXZhbHVlAAAIAAhtb2RpZmllcgACb3IACgAibWluZWNyYWZ0OmdhbWVwbGF5L3NreV9saWdodF9sZXZlbAkACWtleWZyYW1lcwoAAAAEAwAFdGlja3MAAACFBQAFdmFsdWU/gAAAAAMABXRpY2tzAAAuWwUABXZhbHVlP4AAAAADAAV0aWNrcwAANWYFAAV2YWx1ZT6IiIkAAwAFdGlja3MAAFc6BQAFdmFsdWU+iIiJAAgACG1vZGlmaWVyAAhtdWx0aXBseQAKABxtaW5lY3JhZnQ6dmlzdWFsL2Nsb3VkX2NvbG9yCQAJa2V5ZnJhbWVzCgAAAAQDAAV0aWNrcwAAAIUDAAV2YWx1Zf////8AAwAFdGlja3MAAC5bAwAFdmFsdWX/////AAMABXRpY2tzAAA1ZgMABXZhbHVl/xkZJgADAAV0aWNrcwAAVzoDAAV2YWx1Zf8ZGSYACAAIbW9kaWZpZXIACG11bHRpcGx5AAoAGm1pbmVjcmFmdDp2aXN1YWwvZm9nX2NvbG9yCQAJa2V5ZnJhbWVzCgAAAAQDAAV0aWNrcwAAAIUIAAV2YWx1ZQAHI2ZmZmZmZgADAAV0aWNrcwAALlsIAAV2YWx1ZQAHI2ZmZmZmZgADAAV0aWNrcwAANWYIAAV2YWx1ZQAHIzBmMGYxNgADAAV0aWNrcwAAVzoIAAV2YWx1ZQAHIzBmMGYxNgAIAAhtb2RpZmllcgAIbXVsdGlwbHkACgAbbWluZWNyYWZ0OnZpc3VhbC9tb29uX2FuZ2xlCgAEZWFzZQkADGN1YmljX2JlemllcgUAAAAEPrlYED52yLQ/I1P4P0JN0wAJAAlrZXlmcmFtZXMKAAAAAgMABXRpY2tzAAAXcAUABXZhbHVlRAcAAAADAAV0aWNrcwAAF3AFAAV2YWx1ZUM0AAAAAAoAGm1pbmVjcmFmdDp2aXN1YWwvc2t5X2NvbG9yCQAJa2V5ZnJhbWVzCgAAAAQDAAV0aWNrcwAAAIUIAAV2YWx1ZQAHI2ZmZmZmZgADAAV0aWNrcwAALlsIAAV2YWx1ZQAHI2ZmZmZmZgADAAV0aWNrcwAANWYIAAV2YWx1ZQAHIzAwMDAwMAADAAV0aWNrcwAAVzoIAAV2YWx1ZQAHIzAwMDAwMAAIAAhtb2RpZmllcgAIbXVsdGlwbHkACgAgbWluZWNyYWZ0OnZpc3VhbC9za3lfbGlnaHRfY29sb3IJAAlrZXlmcmFtZXMKAAAABAMABXRpY2tzAAAC2ggABXZhbHVlAAcjZmZmZmZmAAMABXRpY2tzAAAsBggABXZhbHVlAAcjZmZmZmZmAAMABXRpY2tzAAAzVAgABXZhbHVlAAcjN2E3YWZmAAMABXRpY2tzAABZTAgABXZhbHVlAAcjN2E3YWZmAAgACG1vZGlmaWVyAAhtdWx0aXBseQAKACFtaW5lY3JhZnQ6dmlzdWFsL3NreV9saWdodF9mYWN0b3IJAAlrZXlmcmFtZXMKAAAABAMABXRpY2tzAAAC2gUABXZhbHVlP4AAAAADAAV0aWNrcwAALAYFAAV2YWx1ZT+AAAAAAwAFdGlja3MAADNUBQAFdmFsdWU+dcKPAAMABXRpY2tzAABZTAUABXZhbHVlPnXCjwAIAAhtb2RpZmllcgAIbXVsdGlwbHkACgAbbWluZWNyYWZ0OnZpc3VhbC9zdGFyX2FuZ2xlCgAEZWFzZQkADGN1YmljX2JlemllcgUAAAAEPrlYED52yLQ/I1P4P0JN0wAJAAlrZXlmcmFtZXMKAAAAAgMABXRpY2tzAAAXcAUABXZhbHVlQ7QAAAADAAV0aWNrcwAAF3AFAAV2YWx1ZQAAAAAAAAoAIG1pbmVjcmFmdDp2aXN1YWwvc3Rhcl9icmlnaHRuZXNzCQAJa2V5ZnJhbWVzCgAAAAwDAAV0aWNrcwAAAFwFAAV2YWx1ZT0XjVAAAwAFdGlja3MAAAJzBQAFdmFsdWUAAAAAAAMABXRpY2tzAAAsbQUABXZhbHVlAAAAAAADAAV0aWNrcwAALdQFAAV2YWx1ZTyDEm8AAwAFdGlja3MAAC63BQAFdmFsdWU9NDlYAAMABXRpY2tzAAAwbwUABXZhbHVlPhJumAADAAV0aWNrcwAAMbkFAAV2YWx1ZT6EGJMAAwAFdGlja3MAADOsBQAFdmFsdWU/AAAAAAMABXRpY2tzAABY9AUABXZhbHVlPwAAAAADAAV0aWNrcwAAWfgFAAV2YWx1ZT66XjUAAwAFdGlja3MAAFs8BQAFdmFsdWU+ZmZmAAMABXRpY2tzAABczgUABXZhbHVlPc7ZFwAIAAhtb2RpZmllcgAHbWF4aW11bQAKABptaW5lY3JhZnQ6dmlzdWFsL3N1bl9hbmdsZQoABGVhc2UJAAxjdWJpY19iZXppZXIFAAAABD65WBA+dsi0PyNT+D9CTdMACQAJa2V5ZnJhbWVzCgAAAAIDAAV0aWNrcwAAF3AFAAV2YWx1ZUO0AAAAAwAFdGlja3MAABdwBQAFdmFsdWUAAAAAAAAKACVtaW5lY3JhZnQ6dmlzdWFsL3N1bnJpc2Vfc3Vuc2V0X2NvbG9yCQAJa2V5ZnJhbWVzCgAAACADAAV0aWNrcwAAAEcIAAV2YWx1ZQAJIzVmZWZhMzMzAAMABXRpY2tzAAABNggABXZhbHVlAAkjMjlmNWJhMzMAAwAFdGlja3MAAAI1CAAFdmFsdWUACSMwNmZiZDQzMwADAAV0aWNrcwAAAtoIAAV2YWx1ZQAJIzAwZmZlNTMzAAMABXRpY2tzAAAsBggABXZhbHVlAAkjMDBmZmU1MzMAAwAFdGlja3MAACyFCAAFdmFsdWUACSMwNGZjZDgzMwADAAV0aWNrcwAALQIIAAV2YWx1ZQAJIzBmZjljYjMzAAMABXRpY2tzAAAtqggABXZhbHVlAAkjMjlmNWJhMzMAAwAFdGlja3MAAC6ZCAAFdmFsdWUACSM1ZmVmYTMzMwADAAV0aWNrcwAAL9MIAAV2YWx1ZQAJI2IxZTc4NzMzAAMABXRpY2tzAAAwRggABXZhbHVlAAkjY2NlNDdlMzMAAwAFdGlja3MAADDgCAAFdmFsdWUACSNlOWUwNzIzMwADAAV0aWNrcwAAMUUIAAV2YWx1ZQAJI2Y2ZGQ2YjMzAAMABXRpY2tzAAAxvAgABXZhbHVlAAkjZmVkYTYzMzMAAwAFdGlja3MAADIpCAAFdmFsdWUACSNmZWQ3NWMzMwADAAV0aWNrcwAAMusIAAV2YWx1ZQAJI2VjZDI1MTMzAAMABXRpY2tzAAAzxAgABXZhbHVlAAkjYzFjYzQ3MzMAAwAFdGlja3MAADXPCAAFdmFsdWUACSMzNmJlMzczMwADAAV0aWNrcwAANkAIAAV2YWx1ZQAJIzFmYmIzNTMzAAMABXRpY2tzAAA21wgABXZhbHVlAAkjMDliNzMzMzMAAwAFdGlja3MAADdwCAAFdmFsdWUACSMwMGIzMzMzMwADAAV0aWNrcwAAVS8IAAV2YWx1ZQAJIzAwYjIzMzMzAAMABXRpY2tzAABVyQgABXZhbHVlAAkjMDliNzMzMzMAAwAFdGlja3MAAFZgCAAFdmFsdWUACSMxZmJiMzUzMwADAAV0aWNrcwAAVtEIAAV2YWx1ZQAJIzM2YmUzNzMzAAMABXRpY2tzAABY3AgABXZhbHVlAAkjYzFjYzQ3MzMAAwAFdGlja3MAAFm1CAAFdmFsdWUACSNlY2QyNTEzMwADAAV0aWNrcwAAWncIAAV2YWx1ZQAJI2ZlZDc1YzMzAAMABXRpY2tzAABa6AgABXZhbHVlAAkjZmVkYTYzMzMAAwAFdGlja3MAAFvACAAFdmFsdWUACSNlOWUwNzIzMwADAAV0aWNrcwAAXFoIAAV2YWx1ZQAJI2NjZTQ3ZTMzAAMABXRpY2tzAABczQgABXZhbHVlAAkjYjFlNzg3MzMAAAAA"
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_material",
+        "entries": [
+          {
+            "key": "minecraft:amethyst",
+            "value": "CggACmFzc2V0X25hbWUACGFtZXRoeXN0CgALZGVzY3JpcHRpb24IAAVjb2xvcgAHIzlBNUNDNggACXRyYW5zbGF0ZQAgdHJpbV9tYXRlcmlhbC5taW5lY3JhZnQuYW1ldGh5c3QAAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:trim_pattern",
+        "entries": [
+          {
+            "key": "minecraft:bolt",
+            "value": "CggACGFzc2V0X2lkAA5taW5lY3JhZnQ6Ym9sdAEABWRlY2FsAAoAC2Rlc2NyaXB0aW9uCAAJdHJhbnNsYXRlABt0cmltX3BhdHRlcm4ubWluZWNyYWZ0LmJvbHQAAA=="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_sound_variant",
+        "entries": [
+          {
+            "key": "minecraft:angry",
+            "value": "CggADWFtYmllbnRfc291bmQAI21pbmVjcmFmdDplbnRpdHkud29sZl9hbmdyeS5hbWJpZW50CAALZGVhdGhfc291bmQAIW1pbmVjcmFmdDplbnRpdHkud29sZl9hbmdyeS5kZWF0aAgAC2dyb3dsX3NvdW5kACFtaW5lY3JhZnQ6ZW50aXR5LndvbGZfYW5ncnkuZ3Jvd2wIAApodXJ0X3NvdW5kACBtaW5lY3JhZnQ6ZW50aXR5LndvbGZfYW5ncnkuaHVydAgACnBhbnRfc291bmQAIG1pbmVjcmFmdDplbnRpdHkud29sZl9hbmdyeS5wYW50CAALd2hpbmVfc291bmQAIW1pbmVjcmFmdDplbnRpdHkud29sZl9hbmdyeS53aGluZQA="
+          }
+        ]
+      },
+      {
+        "id": "minecraft:wolf_variant",
+        "entries": [
+          {
+            "key": "minecraft:ashen",
+            "value": "CgoABmFzc2V0cwgABWFuZ3J5ACZtaW5lY3JhZnQ6ZW50aXR5L3dvbGYvd29sZl9hc2hlbl9hbmdyeQgABHRhbWUAJW1pbmVjcmFmdDplbnRpdHkvd29sZi93b2xmX2FzaGVuX3RhbWUIAAR3aWxkACBtaW5lY3JhZnQ6ZW50aXR5L3dvbGYvd29sZl9hc2hlbgAA"
+          }
+        ]
+      },
       {
         "id": "minecraft:worldgen/biome",
         "entries": [
@@ -243,20 +945,11 @@
         ]
       },
       {
-        "id": "minecraft:chat_type",
+        "id": "minecraft:zombie_nautilus_variant",
         "entries": [
           {
-            "key": "minecraft:chat",
-            "value": "CgoABGNoYXQJAApwYXJhbWV0ZXJzCAAAAAIABnNlbmRlcgAHY29udGVudAgAD3RyYW5zbGF0aW9uX2tleQAOY2hhdC50eXBlLnRleHQACgAJbmFycmF0aW9uCQAKcGFyYW1ldGVycwgAAAACAAZzZW5kZXIAB2NvbnRlbnQIAA90cmFuc2xhdGlvbl9rZXkAFmNoYXQudHlwZS50ZXh0Lm5hcnJhdGUAAA=="
-          }
-        ]
-      },
-      {
-        "id": "minecraft:damage_type",
-        "entries": [
-          {
-            "key": "minecraft:generic",
-            "value": "CgUACmV4aGF1c3Rpb24AAAAACAAKbWVzc2FnZV9pZAAHZ2VuZXJpYwgAB3NjYWxpbmcAIHdoZW5fY2F1c2VkX2J5X2xpdmluZ19ub25fcGxheWVyAA=="
+            "key": "minecraft:temperate",
+            "value": "CggACGFzc2V0X2lkACltaW5lY3JhZnQ6ZW50aXR5L25hdXRpbHVzL3pvbWJpZV9uYXV0aWx1cwA="
           }
         ]
       }

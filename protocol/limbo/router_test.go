@@ -18,6 +18,7 @@ import (
 	"github.com/RoselleMC/limbgo/dialog"
 	"github.com/RoselleMC/limbgo/internal/protocol/wire"
 	"github.com/RoselleMC/limbgo/protocol/packetid"
+	"github.com/RoselleMC/limbgo/protocol/registrydata"
 	"go.minekube.com/common/minecraft/component"
 )
 
@@ -317,6 +318,43 @@ func TestProtocol775LoginConfigurationAliasAndChunk(t *testing.T) {
 	testModernLoginConfigurationAndChunkWithPacketProtocol(t, protocol775, protocol774)
 }
 
+func TestProtocolPolicyRejectsBeforeLoginStart(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	got := make(chan limbgo.ProtocolRequest, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			ProtocolPolicy: limbgo.ProtocolPolicyFunc(func(_ context.Context, req limbgo.ProtocolRequest) error {
+				got <- req
+				return limbgo.RejectProtocolText("Use Minecraft 1.21.5-1.21.11")
+			}),
+		}.ServeConn(context.Background(), serverConn, testServices{})
+	}()
+
+	if err := writeHandshake(clientConn, protocol774, "login.example", 25565, stateLogin); err != nil {
+		t.Fatalf("write handshake: %v", err)
+	}
+	reader := bufio.NewReader(clientConn)
+	disconnect := assertPacketID(t, reader, protocol774, packetid.StateLogin, "disconnect")
+	reason, err := wire.ReadString(bytes.NewReader(disconnect.Data), 32767)
+	if err != nil {
+		t.Fatalf("read disconnect reason: %v", err)
+	}
+	if !strings.Contains(reason, "Use Minecraft 1.21.5-1.21.11") {
+		t.Fatalf("disconnect reason = %s", reason)
+	}
+	req := <-got
+	if req.ProtocolVersion != int(protocol774) || req.RequestedHost != "login.example" {
+		t.Fatalf("protocol request = %+v", req)
+	}
+	if err := <-errCh; !errors.Is(err, limbgo.ErrProtocolRejected) {
+		t.Fatalf("router error = %v, want protocol rejected", err)
+	}
+}
+
 func TestProtocol774OnlineModeUsesSessionVerifierProfile(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 	defer clientConn.Close()
@@ -389,7 +427,7 @@ func TestProtocol774OnlineModeUsesSessionVerifierProfile(t *testing.T) {
 	success := assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "success")
 	assertModernLoginSuccess(t, success.Data, "12345678-1234-1234-1234-1234567890ab", "VerifiedName", 1)
 	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
 		assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "registry_data")
 	}
 	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "tags")
@@ -466,7 +504,7 @@ func TestProtocol774HybridModeFallsBackToOfflineOnInvalidSession(t *testing.T) {
 	success := assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "success")
 	assertModernLoginSuccess(t, success.Data, limbgo.OfflineUUID("TestPlayer"), "TestPlayer", 0)
 	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
 		assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "registry_data")
 	}
 	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "tags")
@@ -540,7 +578,7 @@ func TestProtocol774HybridModeUsesVerifiedSessionWhenValid(t *testing.T) {
 	success := assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "success")
 	assertModernLoginSuccess(t, success.Data, "12345678-1234-1234-1234-1234567890ab", "PremiumName", 1)
 	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
 		assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "registry_data")
 	}
 	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "tags")
@@ -626,7 +664,7 @@ func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
 	reader := bufio.NewReader(clientConn)
 	assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
 	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
 		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
 	}
 	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
@@ -818,7 +856,7 @@ func TestProtocol774DialogAPIAndClickEvent(t *testing.T) {
 	reader := bufio.NewReader(clientConn)
 	assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
 	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
 		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
 	}
 	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
@@ -999,7 +1037,7 @@ func TestProtocol774ConfiguredWorldTime(t *testing.T) {
 	reader := bufio.NewReader(clientConn)
 	assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
 	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
-	for i := 0; i < 4; i++ {
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
 		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
 	}
 	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
@@ -1083,11 +1121,7 @@ func testModernLoginConfigurationAndChunkWithPacketProtocol(t *testing.T, protoc
 	assertPacketID(t, reader, packetProtocol, packetid.StateLogin, "success")
 	writeServerboundNamedPacket(t, clientConn, packetProtocol, packetid.StateLogin, "login_acknowledged", nil)
 
-	registryPacketCount := 4
-	if protocol < protocol766 {
-		registryPacketCount = 1
-	}
-	for i := 0; i < registryPacketCount; i++ {
+	for i := 0; i < expectedRegistryPacketCount(t, protocol); i++ {
 		assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "registry_data")
 	}
 	assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "tags")
@@ -1243,15 +1277,35 @@ func TestProtocol47ActionBarUnsupported(t *testing.T) {
 	}
 }
 
+func expectedRegistryPacketCount(t *testing.T, protocol int32) int {
+	t.Helper()
+	modernProtocols, err := DefaultModernProtocols()
+	if err != nil {
+		t.Fatalf("load modern protocols: %v", err)
+	}
+	cfg, ok := modernProtocols.configFor(protocol)
+	if !ok {
+		t.Fatalf("missing modern protocol config for %d", protocol)
+	}
+	if cfg.registryCodecNBT {
+		return 1
+	}
+	data, err := registrydata.Default()
+	if err != nil {
+		t.Fatalf("load registry data: %v", err)
+	}
+	registries, ok := data.Registries(cfg.dataProtocolID())
+	if !ok {
+		t.Fatalf("missing registry data for protocol %d", cfg.dataProtocolID())
+	}
+	return 1 + len(registries)
+}
+
 func completeModernJoin(t *testing.T, conn net.Conn, reader *bufio.Reader, protocol int32, packetProtocol int32) {
 	t.Helper()
 	assertPacketID(t, reader, packetProtocol, packetid.StateLogin, "success")
 	writeServerboundNamedPacket(t, conn, packetProtocol, packetid.StateLogin, "login_acknowledged", nil)
-	registryPacketCount := 4
-	if protocol < protocol766 {
-		registryPacketCount = 1
-	}
-	for i := 0; i < registryPacketCount; i++ {
+	for i := 0; i < expectedRegistryPacketCount(t, protocol); i++ {
 		assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "registry_data")
 	}
 	assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "tags")
