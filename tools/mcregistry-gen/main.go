@@ -36,7 +36,10 @@ var preferredEntries = map[string][]string{
 	"minecraft:worldgen/biome": {"minecraft:plains"},
 	"minecraft:chat_type":      {"minecraft:chat"},
 	"minecraft:damage_type":    {"minecraft:generic"},
+	"minecraft:dialog":         {"minecraft:server_links"},
 }
+
+var compactRegistries = map[string]bool{}
 
 type versionJSON struct {
 	Version          int32  `json:"version"`
@@ -83,14 +86,26 @@ type generatedEntry struct {
 
 type generatedData struct {
 	Registries map[int32][]generatedRegistry
+	Tags       map[int32][]generatedTagRegistry
 	Codecs     map[int32][]byte
 	Dimensions map[int32][]byte
 }
 
+type generatedTagRegistry struct {
+	ID   string
+	Tags []generatedTag
+}
+
+type generatedTag struct {
+	Key    string
+	Values []int32
+}
+
 type encodedData struct {
-	Registries      map[string][]encodedRegistry `json:"registries"`
-	DimensionCodecs map[string]string            `json:"dimension_codecs"`
-	Dimensions      map[string]string            `json:"dimensions"`
+	Registries      map[string][]encodedRegistry    `json:"registries"`
+	Tags            map[string][]encodedTagRegistry `json:"tags,omitempty"`
+	DimensionCodecs map[string]string               `json:"dimension_codecs"`
+	Dimensions      map[string]string               `json:"dimensions"`
 }
 
 type encodedRegistry struct {
@@ -101,6 +116,22 @@ type encodedRegistry struct {
 type encodedEntry struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+type encodedTagRegistry struct {
+	ID   string       `json:"id"`
+	Tags []encodedTag `json:"tags"`
+}
+
+type encodedTag struct {
+	Key    string  `json:"key"`
+	Values []int32 `json:"values"`
+}
+
+type itemJSON struct {
+	ID                int32    `json:"id"`
+	Name              string   `json:"name"`
+	EnchantCategories []string `json:"enchantCategories"`
 }
 
 func main() {
@@ -143,10 +174,12 @@ func readProtocolRegistries(pcDataDir string) (generatedData, error) {
 
 	out := generatedData{
 		Registries: map[int32][]generatedRegistry{},
+		Tags:       map[int32][]generatedTagRegistry{},
 		Codecs:     map[int32][]byte{},
 		Dimensions: map[int32][]byte{},
 	}
 	var latest []generatedRegistry
+	var latestTags []generatedTagRegistry
 	var latestCodec []byte
 	var latestDimension []byte
 	for _, dir := range orderedDirs {
@@ -159,9 +192,12 @@ func readProtocolRegistries(pcDataDir string) (generatedData, error) {
 			continue
 		}
 		loginPath := filepath.Join(pcDataDir, dir, "loginPacket.json")
-		if registries, codec, dimension, err := readLoginRegistries(loginPath); err == nil {
+		if registries, tags, codec, dimension, err := readLoginRegistries(loginPath); err == nil {
 			if registries != nil {
 				latest = registries
+			}
+			if tags != nil {
+				latestTags = tags
 			}
 			if codec != nil {
 				latestCodec = codec
@@ -174,6 +210,9 @@ func readProtocolRegistries(pcDataDir string) (generatedData, error) {
 		}
 		if latest != nil {
 			out.Registries[version.Version] = cloneRegistries(latest)
+		}
+		if latestTags != nil {
+			out.Tags[version.Version] = cloneTags(latestTags)
 		}
 		if latestCodec != nil && version.Version >= 757 && version.Version < 766 {
 			out.Codecs[version.Version] = append([]byte(nil), latestCodec...)
@@ -188,24 +227,24 @@ func readProtocolRegistries(pcDataDir string) (generatedData, error) {
 	return out, nil
 }
 
-func readLoginRegistries(path string) ([]generatedRegistry, []byte, []byte, error) {
+func readLoginRegistries(path string) ([]generatedRegistry, []generatedTagRegistry, []byte, []byte, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 	var login loginPacketJSON
 	if err := json.Unmarshal(data, &login); err != nil {
-		return nil, nil, nil, fmt.Errorf("parse %s: %w", path, err)
+		return nil, nil, nil, nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 	if len(login.DimensionCodec) == 0 {
-		return nil, nil, nil, fmt.Errorf("%s missing dimensionCodec", path)
+		return nil, nil, nil, nil, fmt.Errorf("%s missing dimensionCodec", path)
 	}
 
 	var dimension []byte
 	if login.Dimension.Type != "" {
 		encoded, err := encodeAnonymousNBT(login.Dimension)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("%s encode dimension: %w", path, err)
+			return nil, nil, nil, nil, fmt.Errorf("%s encode dimension: %w", path, err)
 		}
 		dimension = encoded
 	}
@@ -214,14 +253,14 @@ func readLoginRegistries(path string) ([]generatedRegistry, []byte, []byte, erro
 	if err := json.Unmarshal(login.DimensionCodec, &typed); err == nil && typed.Type != "" {
 		codec, err := encodeAnonymousNBT(typed)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("%s encode dimensionCodec: %w", path, err)
+			return nil, nil, nil, nil, fmt.Errorf("%s encode dimensionCodec: %w", path, err)
 		}
-		return nil, codec, dimension, nil
+		return nil, nil, codec, dimension, nil
 	}
 
 	var dimensionCodec map[string]registryJSON
 	if err := json.Unmarshal(login.DimensionCodec, &dimensionCodec); err != nil {
-		return nil, nil, nil, fmt.Errorf("parse %s dimensionCodec: %w", path, err)
+		return nil, nil, nil, nil, fmt.Errorf("parse %s dimensionCodec: %w", path, err)
 	}
 	var registryIDs []string
 	for registryID := range dimensionCodec {
@@ -233,22 +272,39 @@ func readLoginRegistries(path string) ([]generatedRegistry, []byte, []byte, erro
 	sort.Strings(registryIDs)
 
 	var registries []generatedRegistry
+	tagRefs := map[string]map[string]bool{}
 	for _, registryID := range registryIDs {
 		registry, ok := dimensionCodec[registryID]
 		if !ok {
-			return nil, nil, nil, fmt.Errorf("%s missing registry %s", path, registryID)
+			return nil, nil, nil, nil, fmt.Errorf("%s missing registry %s", path, registryID)
 		}
 		generated := generatedRegistry{ID: registry.ID}
 		if generated.ID == "" {
 			generated.ID = registryID
 		}
+		if !compactRegistries[registryID] {
+			for _, entry := range registry.Entries {
+				collectTagReferences(registryID, entry.Value, tagRefs)
+				value, err := encodeAnonymousNBT(entry.Value)
+				if err != nil {
+					return nil, nil, nil, nil, fmt.Errorf("%s encode %s/%s: %w", path, registryID, entry.Key, err)
+				}
+				generated.Entries = append(generated.Entries, generatedEntry{
+					Key:   entry.Key,
+					Value: value,
+				})
+			}
+			registries = append(registries, generated)
+			continue
+		}
 		entry, err := selectRegistryEntry(registryID, registry.Entries)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("%s %w", path, err)
+			return nil, nil, nil, nil, fmt.Errorf("%s %w", path, err)
 		}
+		collectTagReferences(registryID, entry.Value, tagRefs)
 		value, err := encodeAnonymousNBT(entry.Value)
 		if err != nil {
-			return nil, nil, nil, fmt.Errorf("%s encode %s/%s: %w", path, registryID, entry.Key, err)
+			return nil, nil, nil, nil, fmt.Errorf("%s encode %s/%s: %w", path, registryID, entry.Key, err)
 		}
 		generated.Entries = append(generated.Entries, generatedEntry{
 			Key:   entry.Key,
@@ -256,7 +312,11 @@ func readLoginRegistries(path string) ([]generatedRegistry, []byte, []byte, erro
 		})
 		registries = append(registries, generated)
 	}
-	return registries, nil, dimension, nil
+	tags, err := generateTags(path, tagRefs, registries)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+	return registries, tags, nil, dimension, nil
 }
 
 func selectRegistryEntry(registryID string, entries []entryJSON) (entryJSON, error) {
@@ -268,7 +328,157 @@ func selectRegistryEntry(registryID string, entries []entryJSON) (entryJSON, err
 	if len(entries) == 0 {
 		return entryJSON{}, fmt.Errorf("registry %s has no entries", registryID)
 	}
+	for _, entry := range entries {
+		if !hasMinecraftTagReference(entry.Value) {
+			return entry, nil
+		}
+	}
 	return entries[0], nil
+}
+
+func collectTagReferences(sourceRegistry string, value nbtValue, refs map[string]map[string]bool) {
+	var text string
+	if value.Type == "string" && json.Unmarshal(value.Value, &text) == nil && strings.HasPrefix(text, "#minecraft:") {
+		if targetRegistry, ok := tagTargetRegistry(sourceRegistry, strings.TrimPrefix(text, "#")); ok {
+			if refs[targetRegistry] == nil {
+				refs[targetRegistry] = map[string]bool{}
+			}
+			refs[targetRegistry][strings.TrimPrefix(text, "#")] = true
+		}
+	}
+	var raw map[string]json.RawMessage
+	if json.Unmarshal(value.Value, &raw) == nil {
+		for _, nested := range raw {
+			var child nbtValue
+			if json.Unmarshal(nested, &child) == nil && child.Type != "" {
+				collectTagReferences(sourceRegistry, child, refs)
+			}
+		}
+	}
+	var list struct {
+		Type  string            `json:"type"`
+		Value []json.RawMessage `json:"value"`
+	}
+	if json.Unmarshal(value.Value, &list) == nil && list.Type != "" {
+		for _, rawChild := range list.Value {
+			collectTagReferences(sourceRegistry, nbtValue{Type: list.Type, Value: rawChild}, refs)
+		}
+	}
+}
+
+func hasMinecraftTagReference(value nbtValue) bool {
+	refs := map[string]map[string]bool{}
+	collectTagReferences("minecraft:unknown", value, refs)
+	for _, tags := range refs {
+		if len(tags) > 0 {
+			return true
+		}
+	}
+	return false
+}
+
+func tagTargetRegistry(sourceRegistry string, tagName string) (string, bool) {
+	switch {
+	case sourceRegistry == "minecraft:enchantment" && strings.HasPrefix(tagName, "minecraft:enchantable/"):
+		return "minecraft:item", true
+	case sourceRegistry == "minecraft:enchantment" && tagName == "minecraft:arrows":
+		return "minecraft:entity_type", true
+	case sourceRegistry == "minecraft:enchantment" && (strings.HasSuffix(tagName, "_blocks") || strings.HasPrefix(tagName, "minecraft:blocks_") || tagName == "minecraft:lightning_rods"):
+		return "minecraft:block", true
+	case sourceRegistry == "minecraft:enchantment" && strings.HasPrefix(tagName, "minecraft:sensitive_to_"):
+		return "minecraft:entity_type", true
+	case sourceRegistry == "minecraft:dialog":
+		return "minecraft:dialog", true
+	default:
+		return sourceRegistry, true
+	}
+}
+
+func generateTags(loginPath string, refs map[string]map[string]bool, registries []generatedRegistry) ([]generatedTagRegistry, error) {
+	if len(refs) == 0 {
+		return nil, nil
+	}
+	registryEntryIDs := generatedRegistryEntryIDs(registries)
+	itemIDs, err := readItemIDs(filepath.Join(filepath.Dir(loginPath), "items.json"))
+	if err != nil {
+		return nil, err
+	}
+	var registryIDs []string
+	for registryID := range refs {
+		registryIDs = append(registryIDs, registryID)
+	}
+	sort.Strings(registryIDs)
+	var out []generatedTagRegistry
+	for _, registryID := range registryIDs {
+		var tagNames []string
+		for tagName := range refs[registryID] {
+			tagNames = append(tagNames, tagName)
+		}
+		sort.Strings(tagNames)
+		tagRegistry := generatedTagRegistry{ID: registryID}
+		for _, tagName := range tagNames {
+			entries, err := tagEntries(registryID, tagName, itemIDs, registryEntryIDs)
+			if err != nil {
+				return nil, err
+			}
+			tagRegistry.Tags = append(tagRegistry.Tags, generatedTag{Key: tagName, Values: entries})
+		}
+		out = append(out, tagRegistry)
+	}
+	return out, nil
+}
+
+func tagEntries(registryID string, tagName string, itemIDs map[string]itemJSON, registryEntryIDs map[string]map[string]int32) ([]int32, error) {
+	if registryID == "minecraft:item" && strings.HasPrefix(tagName, "minecraft:enchantable/") {
+		category := strings.TrimPrefix(tagName, "minecraft:enchantable/")
+		var ids []int32
+		for _, item := range itemIDs {
+			for _, itemCategory := range item.EnchantCategories {
+				if itemCategory == category {
+					ids = append(ids, item.ID)
+					break
+				}
+			}
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		return ids, nil
+	}
+	if entries := registryEntryIDs[registryID]; len(entries) > 0 {
+		var ids []int32
+		for _, id := range entries {
+			ids = append(ids, id)
+		}
+		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+		return ids, nil
+	}
+	return nil, nil
+}
+
+func generatedRegistryEntryIDs(registries []generatedRegistry) map[string]map[string]int32 {
+	out := map[string]map[string]int32{}
+	for _, registry := range registries {
+		out[registry.ID] = map[string]int32{}
+		for i, entry := range registry.Entries {
+			out[registry.ID][entry.Key] = int32(i)
+		}
+	}
+	return out
+}
+
+func readItemIDs(path string) (map[string]itemJSON, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read items: %w", err)
+	}
+	var items []itemJSON
+	if err := json.Unmarshal(data, &items); err != nil {
+		return nil, fmt.Errorf("parse items: %w", err)
+	}
+	out := make(map[string]itemJSON, len(items))
+	for _, item := range items {
+		out["minecraft:"+item.Name] = item
+	}
+	return out, nil
 }
 
 func findEntry(entries []entryJSON, key string) (entryJSON, bool) {
@@ -588,6 +798,7 @@ func readReleaseTypes(pcDataDir string) (map[string]string, error) {
 func render(data generatedData) ([]byte, error) {
 	out := encodedData{
 		Registries:      map[string][]encodedRegistry{},
+		Tags:            map[string][]encodedTagRegistry{},
 		DimensionCodecs: map[string]string{},
 		Dimensions:      map[string]string{},
 	}
@@ -609,6 +820,25 @@ func render(data generatedData) ([]byte, error) {
 			registries = append(registries, encoded)
 		}
 		out.Registries[strconv.Itoa(id)] = registries
+	}
+	tagIDs := make([]int, 0, len(data.Tags))
+	for protocol := range data.Tags {
+		tagIDs = append(tagIDs, int(protocol))
+	}
+	sort.Ints(tagIDs)
+	for _, id := range tagIDs {
+		var registries []encodedTagRegistry
+		for _, registry := range data.Tags[int32(id)] {
+			encoded := encodedTagRegistry{ID: registry.ID}
+			for _, tag := range registry.Tags {
+				encoded.Tags = append(encoded.Tags, encodedTag{
+					Key:    tag.Key,
+					Values: append([]int32(nil), tag.Values...),
+				})
+			}
+			registries = append(registries, encoded)
+		}
+		out.Tags[strconv.Itoa(id)] = registries
 	}
 	codecIDs := make([]int, 0, len(data.Codecs))
 	for protocol := range data.Codecs {
@@ -674,6 +904,24 @@ func cloneRegistries(in []generatedRegistry) []generatedRegistry {
 		out = append(out, generatedRegistry{
 			ID:      registry.ID,
 			Entries: entries,
+		})
+	}
+	return out
+}
+
+func cloneTags(in []generatedTagRegistry) []generatedTagRegistry {
+	out := make([]generatedTagRegistry, 0, len(in))
+	for _, registry := range in {
+		tags := make([]generatedTag, 0, len(registry.Tags))
+		for _, tag := range registry.Tags {
+			tags = append(tags, generatedTag{
+				Key:    tag.Key,
+				Values: append([]int32(nil), tag.Values...),
+			})
+		}
+		out = append(out, generatedTagRegistry{
+			ID:   registry.ID,
+			Tags: tags,
 		})
 	}
 	return out

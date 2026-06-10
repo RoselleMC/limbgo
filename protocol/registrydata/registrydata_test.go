@@ -55,6 +55,58 @@ func TestProtocol774IncludesVanillaRequiredVariantRegistries(t *testing.T) {
 	}
 }
 
+func TestProtocol774IncludesRequiredDamageTypes(t *testing.T) {
+	registries, ok := Registries(774)
+	if !ok {
+		t.Fatalf("protocol 774 has no generated registries")
+	}
+	damageTypes := map[string]bool{}
+	for _, registry := range registries {
+		if registry.ID != "minecraft:damage_type" {
+			continue
+		}
+		for _, entry := range registry.Entries {
+			damageTypes[entry.Key] = true
+		}
+	}
+	for _, key := range []string{
+		"minecraft:generic",
+		"minecraft:in_fire",
+		"minecraft:on_fire",
+		"minecraft:out_of_world",
+	} {
+		if !damageTypes[key] {
+			t.Fatalf("protocol 774 missing damage type %s", key)
+		}
+	}
+}
+
+func TestProtocol774IncludesWorldRuntimeRegistryEntries(t *testing.T) {
+	registries, ok := Registries(774)
+	if !ok {
+		t.Fatalf("protocol 774 has no generated registries")
+	}
+	entries := map[string]map[string]bool{}
+	for _, registry := range registries {
+		entries[registry.ID] = map[string]bool{}
+		for _, entry := range registry.Entries {
+			entries[registry.ID][entry.Key] = true
+		}
+	}
+	cases := map[string][]string{
+		"minecraft:worldgen/biome": {"minecraft:plains", "minecraft:forest", "minecraft:dark_forest"},
+		"minecraft:banner_pattern": {"minecraft:base", "minecraft:border", "minecraft:stripe_bottom"},
+		"minecraft:dialog":         {"minecraft:server_links", "minecraft:quick_actions"},
+	}
+	for registryID, keys := range cases {
+		for _, key := range keys {
+			if !entries[registryID][key] {
+				t.Fatalf("protocol 774 missing %s/%s", registryID, key)
+			}
+		}
+	}
+}
+
 func TestGeneratedRegistrySetsAreNonEmpty(t *testing.T) {
 	data, err := Default()
 	if err != nil {
@@ -65,6 +117,47 @@ func TestGeneratedRegistrySetsAreNonEmpty(t *testing.T) {
 			if len(registry.Entries) == 0 {
 				t.Fatalf("protocol %d registry %s has no entries", protocol, registry.ID)
 			}
+		}
+	}
+}
+
+func TestProtocol774IncludesRequiredGeneratedTags(t *testing.T) {
+	tags, ok := Tags(774)
+	if !ok {
+		t.Fatalf("protocol 774 has no generated tags")
+	}
+	for _, registry := range tags {
+		if registry.ID != "minecraft:item" {
+			continue
+		}
+		for _, tag := range registry.Tags {
+			if tag.Key == "minecraft:enchantable/head_armor" && len(tag.Values) > 0 {
+				return
+			}
+		}
+	}
+	t.Fatalf("protocol 774 missing non-empty minecraft:item/minecraft:enchantable/head_armor tag")
+}
+
+func TestProtocol774BindsEnchantmentReferencedTags(t *testing.T) {
+	tags, ok := Tags(774)
+	if !ok {
+		t.Fatalf("protocol 774 has no generated tags")
+	}
+	present := map[string]bool{}
+	for _, registry := range tags {
+		for _, tag := range registry.Tags {
+			present[registry.ID+"/"+tag.Key] = true
+		}
+	}
+	for _, key := range []string{
+		"minecraft:block/minecraft:soul_speed_blocks",
+		"minecraft:block/minecraft:blocks_wind_charge_explosions",
+		"minecraft:entity_type/minecraft:sensitive_to_smite",
+		"minecraft:entity_type/minecraft:arrows",
+	} {
+		if !present[key] {
+			t.Fatalf("protocol 774 missing generated tag %s", key)
 		}
 	}
 }

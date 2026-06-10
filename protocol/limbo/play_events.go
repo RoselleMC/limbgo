@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/RoselleMC/limbgo"
 	"github.com/RoselleMC/limbgo/dialog"
@@ -20,6 +22,8 @@ import (
 	"go.minekube.com/common/minecraft/component"
 	"go.minekube.com/common/minecraft/component/codec"
 )
+
+const keepAliveInterval = 10 * time.Second
 
 type playAdapter struct {
 	protocol       int32
@@ -147,6 +151,9 @@ func servePlayEvents(ctx context.Context, conn net.Conn, reader *bufio.Reader, s
 		return nil
 	}
 	session := &playSession{conn: conn, player: player, adapter: adapter}
+	keepAliveCtx, stopKeepAlive := context.WithCancel(ctx)
+	defer stopKeepAlive()
+	go keepAliveLoop(keepAliveCtx, session)
 	if err := handler.HandleJoin(ctx, session, &limbgo.JoinEvent{
 		Player:   player,
 		Protocol: int(adapter.protocol),
@@ -174,6 +181,38 @@ func servePlayEvents(ctx context.Context, conn net.Conn, reader *bufio.Reader, s
 			return nil
 		}
 	}
+}
+
+func keepAliveLoop(ctx context.Context, session *playSession) {
+	ticker := time.NewTicker(keepAliveInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case now := <-ticker.C:
+			if session.Closed() {
+				return
+			}
+			if err := session.sendKeepAlive(now.UnixMilli()); err != nil {
+				return
+			}
+		}
+	}
+}
+
+func (s *playSession) sendKeepAlive(id int64) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return nil
+	}
+	if err := writeKeepAlive(s.conn, s.adapter, id); err != nil {
+		s.closed = true
+		_ = s.conn.Close()
+		return err
+	}
+	return nil
 }
 
 func isClosedPlayConnError(err error) bool {
@@ -234,6 +273,16 @@ func handlePlayPacket(ctx context.Context, handler limbgo.PlayerEventHandler, se
 func isServerboundPlayPacket(adapter playAdapter, got int32, name string) bool {
 	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToServer, name)
 	return ok && got == id
+}
+
+func writeKeepAlive(conn net.Conn, adapter playAdapter, id int64) error {
+	packetID, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "keep_alive")
+	if !ok {
+		return nil
+	}
+	var data [8]byte
+	binary.BigEndian.PutUint64(data[:], uint64(id))
+	return wire.WritePacket(conn, wire.Packet{ID: packetID, Data: data[:]})
 }
 
 func readFirstPacketString(data []byte) (string, error) {

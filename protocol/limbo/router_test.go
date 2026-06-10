@@ -432,6 +432,7 @@ func TestProtocol774OnlineModeUsesSessionVerifierProfile(t *testing.T) {
 	}
 	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "tags")
 	assertPacketID(t, encryptedReader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateConfiguration, "custom_payload", nil)
 	writeServerboundNamedPacket(t, encryptedConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
 	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "login")
 	assertPacketID(t, encryptedReader, protocol774, packetid.StatePlay, "position")
@@ -1124,7 +1125,10 @@ func testModernLoginConfigurationAndChunkWithPacketProtocol(t *testing.T, protoc
 	for i := 0; i < expectedRegistryPacketCount(t, protocol); i++ {
 		assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "registry_data")
 	}
-	assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "tags")
+	tagsPacket := assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "tags")
+	if protocol == protocol774 || protocol == protocol775 {
+		assertTagsPacketIncludes(t, tagsPacket.Data, "minecraft:item", "minecraft:enchantable/head_armor")
+	}
 	assertPacketID(t, reader, packetProtocol, packetid.StateConfiguration, "finish_configuration")
 	writeServerboundNamedPacket(t, clientConn, packetProtocol, packetid.StateConfiguration, "finish_configuration", nil)
 
@@ -1367,6 +1371,47 @@ func assertTransferPacket(t *testing.T, data []byte, wantHost string, wantPort i
 	if reader.Len() != 0 {
 		t.Fatalf("transfer has %d trailing bytes", reader.Len())
 	}
+}
+
+func assertTagsPacketIncludes(t *testing.T, data []byte, wantRegistry string, wantTag string) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	registryCount, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read tag registry count: %v", err)
+	}
+	for i := int32(0); i < registryCount; i++ {
+		registryID, err := wire.ReadString(reader, 32767)
+		if err != nil {
+			t.Fatalf("read tag registry id: %v", err)
+		}
+		tagCount, err := wire.ReadVarInt(reader)
+		if err != nil {
+			t.Fatalf("read tag count: %v", err)
+		}
+		for j := int32(0); j < tagCount; j++ {
+			tagID, err := wire.ReadString(reader, 32767)
+			if err != nil {
+				t.Fatalf("read tag id: %v", err)
+			}
+			valueCount, err := wire.ReadVarInt(reader)
+			if err != nil {
+				t.Fatalf("read tag value count: %v", err)
+			}
+			for k := int32(0); k < valueCount; k++ {
+				if _, err := wire.ReadVarInt(reader); err != nil {
+					t.Fatalf("read tag value: %v", err)
+				}
+			}
+			if registryID == wantRegistry && tagID == wantTag && valueCount > 0 {
+				if reader.Len() != 0 {
+					return
+				}
+				return
+			}
+		}
+	}
+	t.Fatalf("missing non-empty tag %s/%s", wantRegistry, wantTag)
 }
 
 func writeEncryptionResponseFromRequest(t *testing.T, conn net.Conn, protocol int32, request []byte, sharedSecret []byte) {

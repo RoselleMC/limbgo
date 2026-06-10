@@ -126,19 +126,14 @@ func serveModernProtocol(ctx context.Context, conn net.Conn, reader *bufio.Reade
 			return err
 		}
 	}
-	if err := writeTagsModern(conn, cfg); err != nil {
+	if err := writeTagsModern(conn, cfg, registryData); err != nil {
 		return err
 	}
 	if err := writeNamedPacketModern(conn, cfg, packetid.StateConfiguration, "finish_configuration", nil); err != nil {
 		return err
 	}
-	finish, err := wire.ReadPacket(reader, 0)
-	if err != nil {
+	if err := waitForFinishConfigurationModern(reader, cfg); err != nil {
 		return err
-	}
-	finishID, ok := packetid.ID(cfg.packetProtocol(), packetid.StateConfiguration, packetid.ToServer, "finish_configuration")
-	if !ok || finish.ID != finishID {
-		return fmt.Errorf("expected finish_configuration packet %d, got %d", finishID, finish.ID)
 	}
 
 	if cfg.legacyPlayLogin {
@@ -170,6 +165,46 @@ func serveModernProtocol(ctx context.Context, conn net.Conn, reader *bufio.Reade
 		return err
 	}
 	return servePlayEvents(ctx, conn, reader, services, player, newModernPlayAdapter(cfg))
+}
+
+func waitForFinishConfigurationModern(reader *bufio.Reader, cfg modernProtocolConfig) error {
+	finishID, ok := packetid.ID(cfg.packetProtocol(), packetid.StateConfiguration, packetid.ToServer, "finish_configuration")
+	if !ok {
+		return fmt.Errorf("missing finish_configuration packet id for protocol %d", cfg.packetProtocol())
+	}
+	for {
+		packet, err := wire.ReadPacket(reader, 0)
+		if err != nil {
+			return err
+		}
+		if packet.ID == finishID {
+			return nil
+		}
+		if !isIgnorableConfigurationServerboundPacket(cfg, packet.ID) {
+			return fmt.Errorf("expected finish_configuration packet %d, got %d", finishID, packet.ID)
+		}
+	}
+}
+
+func isIgnorableConfigurationServerboundPacket(cfg modernProtocolConfig, id int32) bool {
+	for _, name := range []string{
+		"settings",
+		"cookie_response",
+		"custom_payload",
+		"keep_alive",
+		"pong",
+		"resource_pack_receive",
+		"select_known_packs",
+		"custom_report_details",
+		"server_links",
+		"custom_click_action",
+		"accept_code_of_conduct",
+	} {
+		if packetID, ok := packetid.ID(cfg.packetProtocol(), packetid.StateConfiguration, packetid.ToServer, name); ok && packetID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func writeLoginSuccessModern(conn net.Conn, player limbgo.Player, cfg modernProtocolConfig) error {
@@ -262,10 +297,32 @@ func writeRegistryDataModern(conn net.Conn, world limbgo.World, cfg modernProtoc
 	return nil
 }
 
-func writeTagsModern(conn net.Conn, cfg modernProtocolConfig) error {
+func writeTagsModern(conn net.Conn, cfg modernProtocolConfig, registryData *registrydata.Data) error {
+	tags, _ := registryData.Tags(cfg.dataProtocolID())
 	var data bytes.Buffer
-	if err := wire.WriteVarInt(&data, 0); err != nil {
+	if err := wire.WriteVarInt(&data, int32(len(tags))); err != nil {
 		return err
+	}
+	for _, registry := range tags {
+		if err := wire.WriteString(&data, registry.ID); err != nil {
+			return err
+		}
+		if err := wire.WriteVarInt(&data, int32(len(registry.Tags))); err != nil {
+			return err
+		}
+		for _, tag := range registry.Tags {
+			if err := wire.WriteString(&data, tag.Key); err != nil {
+				return err
+			}
+			if err := wire.WriteVarInt(&data, int32(len(tag.Values))); err != nil {
+				return err
+			}
+			for _, value := range tag.Values {
+				if err := wire.WriteVarInt(&data, value); err != nil {
+					return err
+				}
+			}
+		}
 	}
 	return writeNamedPacketModern(conn, cfg, packetid.StateConfiguration, "tags", data.Bytes())
 }

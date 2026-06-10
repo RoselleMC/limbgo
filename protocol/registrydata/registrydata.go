@@ -18,6 +18,16 @@ type Registry struct {
 	Entries []Entry
 }
 
+type TagRegistry struct {
+	ID   string
+	Tags []Tag
+}
+
+type Tag struct {
+	Key    string
+	Values []int32
+}
+
 type Entry struct {
 	Key   string
 	Value []byte
@@ -25,14 +35,16 @@ type Entry struct {
 
 type Data struct {
 	registries map[int32][]Registry
+	tags       map[int32][]TagRegistry
 	codecs     map[int32][]byte
 	dimensions map[int32][]byte
 }
 
 type encodedData struct {
-	Registries      map[string][]encodedRegistry `json:"registries"`
-	DimensionCodecs map[string]string            `json:"dimension_codecs"`
-	Dimensions      map[string]string            `json:"dimensions"`
+	Registries      map[string][]encodedRegistry    `json:"registries"`
+	Tags            map[string][]encodedTagRegistry `json:"tags,omitempty"`
+	DimensionCodecs map[string]string               `json:"dimension_codecs"`
+	Dimensions      map[string]string               `json:"dimensions"`
 }
 
 type encodedRegistry struct {
@@ -43,6 +55,16 @@ type encodedRegistry struct {
 type encodedEntry struct {
 	Key   string `json:"key"`
 	Value string `json:"value"`
+}
+
+type encodedTagRegistry struct {
+	ID   string       `json:"id"`
+	Tags []encodedTag `json:"tags"`
+}
+
+type encodedTag struct {
+	Key    string  `json:"key"`
+	Values []int32 `json:"values"`
 }
 
 var (
@@ -58,6 +80,15 @@ func Registries(protocol int32) ([]Registry, bool) {
 	}
 	registries, ok := data.Registries(protocol)
 	return registries, ok
+}
+
+func Tags(protocol int32) ([]TagRegistry, bool) {
+	data, err := Default()
+	if err != nil {
+		return nil, false
+	}
+	tags, ok := data.Tags(protocol)
+	return tags, ok
 }
 
 func DimensionCodec(protocol int32) ([]byte, bool) {
@@ -91,6 +122,7 @@ func LoadBytes(raw []byte) (*Data, error) {
 	}
 	out := &Data{
 		registries: map[int32][]Registry{},
+		tags:       map[int32][]TagRegistry{},
 		codecs:     map[int32][]byte{},
 		dimensions: map[int32][]byte{},
 	}
@@ -112,6 +144,23 @@ func LoadBytes(raw []byte) (*Data, error) {
 				})
 			}
 			out.registries[protocol] = append(out.registries[protocol], registry)
+		}
+	}
+	for rawProtocol, encodedTagRegistries := range encoded.Tags {
+		protocol, err := parseProtocol(rawProtocol)
+		if err != nil {
+			return nil, err
+		}
+		for _, encodedTagRegistry := range encodedTagRegistries {
+			tagRegistry := TagRegistry{ID: encodedTagRegistry.ID}
+			for _, encodedTag := range encodedTagRegistry.Tags {
+				values := append([]int32(nil), encodedTag.Values...)
+				tagRegistry.Tags = append(tagRegistry.Tags, Tag{
+					Key:    encodedTag.Key,
+					Values: values,
+				})
+			}
+			out.tags[protocol] = append(out.tags[protocol], tagRegistry)
 		}
 	}
 	for rawProtocol, rawCodec := range encoded.DimensionCodecs {
@@ -142,6 +191,11 @@ func LoadBytes(raw []byte) (*Data, error) {
 func (d *Data) Registries(protocol int32) ([]Registry, bool) {
 	registries, ok := d.registries[protocol]
 	return registries, ok
+}
+
+func (d *Data) Tags(protocol int32) ([]TagRegistry, bool) {
+	tags, ok := d.tags[protocol]
+	return tags, ok
 }
 
 func (d *Data) DimensionCodec(protocol int32) ([]byte, bool) {
