@@ -279,10 +279,16 @@ type PlayerEventHandler interface {
 	HandleCommand(ctx context.Context, session PlayerSession, event *CommandEvent) error
 	HandleDialogClick(ctx context.Context, session PlayerSession, event *DialogClickEvent) error
 }
+
+type ResourcePackResponseHandler interface {
+	HandleResourcePackResponse(ctx context.Context, session PlayerSession, event *ResourcePackResponseEvent) error
+}
 ```
 
 `PlayerEventHandlerFuncs` is a convenience adapter. For stateful applications,
-define your own type implementing `PlayerEventHandler`.
+define your own type implementing `PlayerEventHandler`. Implement
+`ResourcePackResponseHandler` as well when the handler needs resource-pack
+status events.
 
 ## Player Session
 
@@ -298,19 +304,23 @@ type PlayerSession interface {
 	ClearTitle(ctx context.Context, reset bool) error
 	ShowDialog(ctx context.Context, dialog dialog.Dialog) error
 	ClearDialog(ctx context.Context) error
+	AddResourcePack(ctx context.Context, pack ResourcePack) error
+	RemoveResourcePack(ctx context.Context, id string) error
 	StoreCookie(ctx context.Context, key string, value []byte) error
 	Transfer(ctx context.Context, host string, port int) error
 	Disconnect(ctx context.Context, reason component.Component) error
 }
 
 type SessionCapabilities struct {
-	SystemMessage bool
-	ActionBar     bool
-	Title         bool
-	Dialog        bool
-	StoreCookie   bool
-	Transfer      bool
-	Disconnect    bool
+	SystemMessage      bool
+	ActionBar          bool
+	Title              bool
+	Dialog             bool
+	ResourcePack       bool
+	RemoveResourcePack bool
+	StoreCookie        bool
+	Transfer           bool
+	Disconnect         bool
 }
 ```
 
@@ -348,6 +358,75 @@ events := limbgo.PlayerEventHandlerFuncs{
 vanilla transfer packet, and `Disconnect` writes a rich-text kick reason before
 closing the connection.
 
+## Resource Packs
+
+Resource pack delivery follows the same shape as Velocity's resource-pack
+offer API: the application creates a pack description, sends it through the
+player session, and listens for status changes.
+
+```go
+type ResourcePack struct {
+	ID       string
+	URL      string
+	Hash     string
+	Required bool
+	Prompt   component.Component
+}
+
+type ResourcePackResponseEvent struct {
+	Player     Player
+	ID         string
+	Pack       ResourcePack
+	Status     ResourcePackStatus
+	StatusCode int32
+	Protocol   int
+}
+```
+
+```go
+pack := limbgo.ResourcePack{
+	ID:       "lobby-pack",
+	URL:      "https://cdn.example.net/lobby.zip",
+	Hash:     "0123456789abcdef0123456789abcdef01234567",
+	Required: true,
+	Prompt:   &component.Text{Content: "This server requires its resource pack."},
+}
+
+events := limbgo.PlayerEventHandlerFuncs{
+	Join: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.JoinEvent) error {
+		if !session.Capabilities().ResourcePack {
+			return session.Disconnect(ctx, &component.Text{Content: "Resource packs are not supported by this client."})
+		}
+		return session.AddResourcePack(ctx, pack)
+	},
+	ResourcePackResponse: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ResourcePackResponseEvent) error {
+		if event.ID == "lobby-pack" && event.Status == limbgo.ResourcePackDeclined && event.Pack.Required {
+			return session.Disconnect(ctx, &component.Text{Content: "Please accept the resource pack."})
+		}
+		return nil
+	},
+}
+```
+
+`ResourcePack.ID` is an application-stable identifier. On modern clients,
+limbgo derives the protocol UUID from it unless it is already a dashed UUID,
+then maps client responses back to the original ID. On legacy protocols that do
+not include a pack ID in responses, limbgo reports the last pack sent through
+that session.
+
+`RemoveResourcePack` is available only on protocols with the vanilla
+`remove_resource_pack` packet, currently 1.20.3+ in the supported adapter set.
+Older clients can receive a pack but cannot remove a specific pack by ID.
+Status values include `ResourcePackAccepted`, `ResourcePackDeclined`,
+`ResourcePackDownloaded`, `ResourcePackInvalidURL`,
+`ResourcePackFailedDownload`, `ResourcePackFailedReload`,
+`ResourcePackSuccessfullyLoaded`, and `ResourcePackDiscarded`. `StatusCode`
+preserves the raw protocol value for future client statuses.
+
+For custom handler types, implement `ResourcePackResponseHandler` in addition
+to `PlayerEventHandler` to receive status events. `PlayerEventHandlerFuncs`
+already wires this optional hook.
+
 ## Rich Text
 
 limbgo uses Minekube rich text components instead of defining its own text
@@ -360,7 +439,7 @@ import "go.minekube.com/common/minecraft/component"
 Any API field that takes `component.Component` supports rich text. That includes
 chat/system messages, actionbar messages, title/subtitle overlays, and dialog
 title, external title, body text, button labels, button tooltips, input labels,
-and option display labels.
+option display labels, and resource-pack prompts.
 
 Protocol adapters serialize rich text as JSON for older clients and anonymous
 NBT for modern clients that require it.

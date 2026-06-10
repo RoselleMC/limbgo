@@ -1437,6 +1437,88 @@ func TestProtocol774SessionControlAPI(t *testing.T) {
 	}
 }
 
+func TestProtocol774ResourcePackSessionAPI(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+
+	gotCapabilities := make(chan limbgo.SessionCapabilities, 1)
+	gotResponse := make(chan *limbgo.ResourcePackResponseEvent, 1)
+	pack := limbgo.ResourcePack{
+		ID:       "authman-pack",
+		URL:      "https://cdn.example.test/authman.zip",
+		Hash:     "0123456789abcdef0123456789abcdef01234567",
+		Required: true,
+		Prompt:   &component.Text{Content: "Authman pack"},
+	}
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
+				gotCapabilities <- session.Capabilities()
+				return session.AddResourcePack(ctx, pack)
+			},
+			ResourcePackResponse: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ResourcePackResponseEvent) error {
+				gotResponse <- event
+				if err := session.RemoveResourcePack(ctx, event.ID); err != nil {
+					return err
+				}
+				return session.Disconnect(ctx, &component.Text{Content: "done"})
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	completeModernJoin(t, clientConn, reader, protocol774, protocol774)
+
+	var message bytes.Buffer
+	if err := wire.WriteString(&message, "pack"); err != nil {
+		t.Fatalf("write chat message: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "chat_message", message.Bytes())
+
+	caps := <-gotCapabilities
+	if !caps.ResourcePack || !caps.RemoveResourcePack {
+		t.Fatalf("resource pack capabilities = %+v", caps)
+	}
+	addPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "add_resource_pack")
+	protocolID := assertAddResourcePackPacket(t, addPacket.Data, pack, true)
+
+	var response bytes.Buffer
+	writeUUIDString(t, &response, protocolID)
+	if err := wire.WriteVarInt(&response, 3); err != nil {
+		t.Fatalf("write resource pack status: %v", err)
+	}
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "resource_pack_receive", response.Bytes())
+
+	removePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "remove_resource_pack")
+	assertRemoveResourcePackPacket(t, removePacket.Data, protocolID)
+	disconnectPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "kick_disconnect")
+	if err := skipAnonymousNBT(bytes.NewReader(disconnectPacket.Data)); err != nil {
+		t.Fatalf("disconnect reason nbt: %v", err)
+	}
+
+	event := <-gotResponse
+	if event.ID != pack.ID || event.Status != limbgo.ResourcePackAccepted || event.Protocol != int(protocol774) {
+		t.Fatalf("resource pack response = %+v", event)
+	}
+	if event.Pack.URL != pack.URL || event.Pack.Hash != pack.Hash || !event.Pack.Required {
+		t.Fatalf("resource pack response pack = %+v", event.Pack)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
 func TestProtocol340SessionControlCapabilities(t *testing.T) {
 	session := &playSession{adapter: newPlayAdapter(protocol340)}
 	caps := session.Capabilities()
@@ -1455,6 +1537,46 @@ func TestProtocol340SessionControlCapabilities(t *testing.T) {
 	}
 	if err := session.Transfer(context.Background(), "velocity.internal", 25566); !errors.Is(err, limbgo.ErrUnsupportedCapability) {
 		t.Fatalf("transfer error = %v, want unsupported capability", err)
+	}
+}
+
+func TestProtocol340ResourcePackCapabilities(t *testing.T) {
+	session := &playSession{adapter: newPlayAdapter(protocol340)}
+	caps := session.Capabilities()
+	if !caps.ResourcePack || caps.RemoveResourcePack {
+		t.Fatalf("legacy resource pack capabilities = %+v", caps)
+	}
+	serverConn, clientConn := net.Pipe()
+	defer serverConn.Close()
+	defer clientConn.Close()
+	session.conn = serverConn
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- session.AddResourcePack(context.Background(), limbgo.ResourcePack{
+			ID:   "legacy-pack",
+			URL:  "https://cdn.example.test/legacy.zip",
+			Hash: "legacy-hash",
+		})
+	}()
+	packet := assertPacketID(t, bufio.NewReader(clientConn), protocol340, packetid.StatePlay, "resource_pack_send")
+	assertLegacyResourcePackPacket(t, packet.Data, "https://cdn.example.test/legacy.zip", "legacy-hash")
+	if err := <-errCh; err != nil {
+		t.Fatalf("add legacy resource pack: %v", err)
+	}
+	var response bytes.Buffer
+	if err := wire.WriteVarInt(&response, 3); err != nil {
+		t.Fatalf("write legacy resource pack status: %v", err)
+	}
+	event, err := session.readResourcePackResponse(response.Bytes())
+	if err != nil {
+		t.Fatalf("read legacy resource pack response: %v", err)
+	}
+	if event.ID != "legacy-pack" || event.Status != limbgo.ResourcePackAccepted || event.Protocol != int(protocol340) {
+		t.Fatalf("legacy resource pack response = %+v", event)
+	}
+	if err := session.RemoveResourcePack(context.Background(), "legacy-pack"); !errors.Is(err, limbgo.ErrUnsupportedCapability) {
+		t.Fatalf("remove legacy resource pack error = %v, want unsupported capability", err)
 	}
 }
 
@@ -1562,6 +1684,108 @@ func assertTransferPacket(t *testing.T, data []byte, wantHost string, wantPort i
 	if reader.Len() != 0 {
 		t.Fatalf("transfer has %d trailing bytes", reader.Len())
 	}
+}
+
+func assertAddResourcePackPacket(t *testing.T, data []byte, want limbgo.ResourcePack, wantPrompt bool) string {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	rawUUID := make([]byte, 16)
+	if _, err := reader.Read(rawUUID); err != nil {
+		t.Fatalf("read resource pack uuid: %v", err)
+	}
+	protocolID := formatUUIDBytes(rawUUID)
+	if protocolID != resourcePackProtocolUUID(want.ID) {
+		t.Fatalf("resource pack uuid = %q, want %q", protocolID, resourcePackProtocolUUID(want.ID))
+	}
+	url, err := wire.ReadString(reader, 32767)
+	if err != nil {
+		t.Fatalf("read resource pack url: %v", err)
+	}
+	if url != want.URL {
+		t.Fatalf("resource pack url = %q, want %q", url, want.URL)
+	}
+	hash, err := wire.ReadString(reader, 32767)
+	if err != nil {
+		t.Fatalf("read resource pack hash: %v", err)
+	}
+	if hash != want.Hash {
+		t.Fatalf("resource pack hash = %q, want %q", hash, want.Hash)
+	}
+	required, err := readTestBool(reader)
+	if err != nil {
+		t.Fatalf("read resource pack required: %v", err)
+	}
+	if required != want.Required {
+		t.Fatalf("resource pack required = %t, want %t", required, want.Required)
+	}
+	hasPrompt, err := readTestBool(reader)
+	if err != nil {
+		t.Fatalf("read resource pack prompt option: %v", err)
+	}
+	if hasPrompt != wantPrompt {
+		t.Fatalf("resource pack prompt option = %t, want %t", hasPrompt, wantPrompt)
+	}
+	if hasPrompt {
+		if err := skipAnonymousNBT(reader); err != nil {
+			t.Fatalf("resource pack prompt nbt: %v", err)
+		}
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("add_resource_pack has %d trailing bytes", reader.Len())
+	}
+	return protocolID
+}
+
+func assertRemoveResourcePackPacket(t *testing.T, data []byte, wantID string) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	present, err := readTestBool(reader)
+	if err != nil {
+		t.Fatalf("read remove resource pack option: %v", err)
+	}
+	if !present {
+		t.Fatalf("remove resource pack uuid option = false")
+	}
+	rawUUID := make([]byte, 16)
+	if _, err := reader.Read(rawUUID); err != nil {
+		t.Fatalf("read remove resource pack uuid: %v", err)
+	}
+	if got := formatUUIDBytes(rawUUID); got != wantID {
+		t.Fatalf("remove resource pack uuid = %q, want %q", got, wantID)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("remove_resource_pack has %d trailing bytes", reader.Len())
+	}
+}
+
+func assertLegacyResourcePackPacket(t *testing.T, data []byte, wantURL string, wantHash string) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	url, err := wire.ReadString(reader, 32767)
+	if err != nil {
+		t.Fatalf("read legacy resource pack url: %v", err)
+	}
+	if url != wantURL {
+		t.Fatalf("legacy resource pack url = %q, want %q", url, wantURL)
+	}
+	hash, err := wire.ReadString(reader, 32767)
+	if err != nil {
+		t.Fatalf("read legacy resource pack hash: %v", err)
+	}
+	if hash != wantHash {
+		t.Fatalf("legacy resource pack hash = %q, want %q", hash, wantHash)
+	}
+	if reader.Len() != 0 {
+		t.Fatalf("legacy resource_pack_send has %d trailing bytes", reader.Len())
+	}
+}
+
+func readTestBool(reader *bytes.Reader) (bool, error) {
+	value, err := reader.ReadByte()
+	if err != nil {
+		return false, err
+	}
+	return value != 0, nil
 }
 
 func assertTagsPacketIncludes(t *testing.T, data []byte, wantRegistry string, wantTag string) {

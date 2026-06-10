@@ -17,10 +17,37 @@ type PlayerSession interface {
 	ClearTitle(ctx context.Context, reset bool) error
 	ShowDialog(ctx context.Context, dialog dialog.Dialog) error
 	ClearDialog(ctx context.Context) error
+	AddResourcePack(ctx context.Context, pack ResourcePack) error
+	RemoveResourcePack(ctx context.Context, id string) error
 	StoreCookie(ctx context.Context, key string, value []byte) error
 	Transfer(ctx context.Context, host string, port int) error
 	Disconnect(ctx context.Context, reason component.Component) error
 }
+
+// ResourcePack describes a client resource pack offer. ID is an application
+// stable identifier. Protocol adapters derive the UUID required by modern
+// clients from this ID when it is not already a dashed UUID.
+type ResourcePack struct {
+	ID       string
+	URL      string
+	Hash     string
+	Required bool
+	Prompt   component.Component
+}
+
+// ResourcePackStatus is the client-reported state for a resource pack offer.
+type ResourcePackStatus string
+
+const (
+	ResourcePackAccepted           ResourcePackStatus = "accepted"
+	ResourcePackDeclined           ResourcePackStatus = "declined"
+	ResourcePackDownloaded         ResourcePackStatus = "downloaded"
+	ResourcePackInvalidURL         ResourcePackStatus = "invalid_url"
+	ResourcePackFailedDownload     ResourcePackStatus = "failed_download"
+	ResourcePackFailedReload       ResourcePackStatus = "failed_reload"
+	ResourcePackSuccessfullyLoaded ResourcePackStatus = "successfully_loaded"
+	ResourcePackDiscarded          ResourcePackStatus = "discarded"
+)
 
 // Title is a client title overlay. Title and Subtitle may be nil when only
 // updating timings.
@@ -45,13 +72,15 @@ func TitleTimesTicks(fadeIn, stay, fadeOut int32) *TitleTimes {
 // SessionCapabilities describes optional vanilla features available for the
 // connected player's protocol.
 type SessionCapabilities struct {
-	SystemMessage bool
-	ActionBar     bool
-	Title         bool
-	Dialog        bool
-	StoreCookie   bool
-	Transfer      bool
-	Disconnect    bool
+	SystemMessage      bool
+	ActionBar          bool
+	Title              bool
+	Dialog             bool
+	ResourcePack       bool
+	RemoveResourcePack bool
+	StoreCookie        bool
+	Transfer           bool
+	Disconnect         bool
 }
 
 // PlayerEventHandler receives optional player actions after the limbo join
@@ -65,10 +94,11 @@ type PlayerEventHandler interface {
 
 // PlayerEventHandlerFuncs adapts functions to PlayerEventHandler.
 type PlayerEventHandlerFuncs struct {
-	Join        func(context.Context, PlayerSession, *JoinEvent) error
-	Chat        func(context.Context, PlayerSession, *ChatEvent) error
-	Command     func(context.Context, PlayerSession, *CommandEvent) error
-	DialogClick func(context.Context, PlayerSession, *DialogClickEvent) error
+	Join                 func(context.Context, PlayerSession, *JoinEvent) error
+	Chat                 func(context.Context, PlayerSession, *ChatEvent) error
+	Command              func(context.Context, PlayerSession, *CommandEvent) error
+	DialogClick          func(context.Context, PlayerSession, *DialogClickEvent) error
+	ResourcePackResponse func(context.Context, PlayerSession, *ResourcePackResponseEvent) error
 }
 
 // HandleJoin implements PlayerEventHandler.
@@ -103,6 +133,20 @@ func (h PlayerEventHandlerFuncs) HandleDialogClick(ctx context.Context, session 
 	return h.DialogClick(ctx, session, event)
 }
 
+// ResourcePackResponseHandler can be implemented by an event handler that wants
+// client resource-pack status updates.
+type ResourcePackResponseHandler interface {
+	HandleResourcePackResponse(ctx context.Context, session PlayerSession, event *ResourcePackResponseEvent) error
+}
+
+// HandleResourcePackResponse implements ResourcePackResponseHandler.
+func (h PlayerEventHandlerFuncs) HandleResourcePackResponse(ctx context.Context, session PlayerSession, event *ResourcePackResponseEvent) error {
+	if h.ResourcePackResponse == nil {
+		return nil
+	}
+	return h.ResourcePackResponse(ctx, session, event)
+}
+
 // JoinEvent is emitted after the initial limbo join and spawn chunk have been
 // sent. Session methods are safe to call from this callback.
 type JoinEvent struct {
@@ -135,4 +179,15 @@ type DialogClickEvent struct {
 	Payload  []byte
 	Protocol int
 	Canceled bool
+}
+
+// ResourcePackResponseEvent is emitted when the client reports a status change
+// for a resource pack offered through PlayerSession.AddResourcePack.
+type ResourcePackResponseEvent struct {
+	Player     Player
+	ID         string
+	Pack       ResourcePack
+	Status     ResourcePackStatus
+	StatusCode int32
+	Protocol   int
 }

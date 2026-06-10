@@ -152,6 +152,10 @@ JSON config. A `LoginPolicy` receives the client-declared `ClaimedUUID` from
 `login_start` when that protocol carries one, allowing applications to choose
 offline or online mode before vanilla session proof starts.
 
+The Go session API can also offer resource packs after join and receive client
+status events. Modern clients support stable pack IDs and removal; older clients
+can still receive a pack but may not support removing a specific pack by ID.
+
 `world.schematic` is optional. When it is set, `world/schematic` loads the
 Sponge `.schem` file into a version-neutral world palette. Protocol adapters
 translate that palette to client-specific block state IDs at chunk serialization

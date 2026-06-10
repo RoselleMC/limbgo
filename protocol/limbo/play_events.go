@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/sha1"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -19,6 +20,7 @@ import (
 	"github.com/RoselleMC/limbgo/dialog"
 	"github.com/RoselleMC/limbgo/internal/protocol/wire"
 	"github.com/RoselleMC/limbgo/protocol/packetid"
+	"github.com/google/uuid"
 	"go.minekube.com/common/minecraft/component"
 	"go.minekube.com/common/minecraft/component/codec"
 )
@@ -39,11 +41,14 @@ func newModernPlayAdapter(cfg modernProtocolConfig) playAdapter {
 }
 
 type playSession struct {
-	conn    net.Conn
-	player  limbgo.Player
-	adapter playAdapter
-	mu      sync.Mutex
-	closed  bool
+	conn                    net.Conn
+	player                  limbgo.Player
+	adapter                 playAdapter
+	mu                      sync.Mutex
+	closed                  bool
+	resourcePacks           map[string]limbgo.ResourcePack
+	resourcePackProtocolIDs map[string]string
+	lastResourcePackID      string
 }
 
 func (s *playSession) Player() limbgo.Player {
@@ -90,6 +95,26 @@ func (s *playSession) ClearDialog(_ context.Context) error {
 	return writeClearDialog(s.conn, s.adapter)
 }
 
+func (s *playSession) AddResourcePack(_ context.Context, pack limbgo.ResourcePack) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := writeResourcePack(s.conn, s.adapter, pack); err != nil {
+		return err
+	}
+	s.rememberResourcePack(pack)
+	return nil
+}
+
+func (s *playSession) RemoveResourcePack(_ context.Context, id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := writeRemoveResourcePack(s.conn, s.adapter, id); err != nil {
+		return err
+	}
+	s.forgetResourcePack(id)
+	return nil
+}
+
 func (s *playSession) StoreCookie(_ context.Context, key string, value []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -117,8 +142,82 @@ func (s *playSession) Closed() bool {
 	return s.closed
 }
 
+func (s *playSession) rememberResourcePack(pack limbgo.ResourcePack) {
+	if s.resourcePacks == nil {
+		s.resourcePacks = map[string]limbgo.ResourcePack{}
+	}
+	if s.resourcePackProtocolIDs == nil {
+		s.resourcePackProtocolIDs = map[string]string{}
+	}
+	s.resourcePacks[pack.ID] = pack
+	s.resourcePackProtocolIDs[resourcePackProtocolUUID(pack.ID)] = pack.ID
+	if pack.Hash != "" {
+		s.resourcePackProtocolIDs[pack.Hash] = pack.ID
+	}
+	s.lastResourcePackID = pack.ID
+}
+
+func (s *playSession) forgetResourcePack(id string) {
+	pack, ok := s.resourcePacks[id]
+	delete(s.resourcePacks, id)
+	delete(s.resourcePackProtocolIDs, resourcePackProtocolUUID(id))
+	if ok && pack.Hash != "" {
+		delete(s.resourcePackProtocolIDs, pack.Hash)
+	}
+	s.lastResourcePackID = ""
+	for remaining := range s.resourcePacks {
+		s.lastResourcePackID = remaining
+		break
+	}
+}
+
+func (s *playSession) readResourcePackResponse(data []byte) (*limbgo.ResourcePackResponseEvent, error) {
+	reader := bytes.NewReader(data)
+	protocolID := ""
+	if s.adapter.protocol == protocol47 {
+		hash, err := wire.ReadString(reader, 40)
+		if err != nil {
+			return nil, err
+		}
+		protocolID = hash
+	} else if hasModernResourcePackID(s.adapter) {
+		id, err := readPacketUUID(reader)
+		if err != nil {
+			return nil, err
+		}
+		protocolID = id
+	}
+	rawStatus, err := wire.ReadVarInt(reader)
+	if err != nil {
+		return nil, err
+	}
+	if reader.Len() != 0 {
+		return nil, fmt.Errorf("resource_pack_receive has %d trailing bytes", reader.Len())
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	id := s.lastResourcePackID
+	if protocolID != "" {
+		if mapped, ok := s.resourcePackProtocolIDs[protocolID]; ok {
+			id = mapped
+		} else {
+			id = protocolID
+		}
+	}
+	return &limbgo.ResourcePackResponseEvent{
+		Player:     s.player,
+		ID:         id,
+		Pack:       s.resourcePacks[id],
+		Status:     resourcePackStatus(rawStatus),
+		StatusCode: rawStatus,
+		Protocol:   int(s.adapter.protocol),
+	}, nil
+}
+
 func sessionCapabilities(adapter playAdapter) limbgo.SessionCapabilities {
 	_, hasDialog := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "show_dialog")
+	hasResourcePack := hasClientboundPlayPacket(adapter, "add_resource_pack") || hasClientboundPlayPacket(adapter, "resource_pack_send")
+	hasRemoveResourcePack := hasClientboundPlayPacket(adapter, "remove_resource_pack")
 	_, hasStoreCookie := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "store_cookie")
 	_, hasTransfer := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "transfer")
 	_, hasDisconnect := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "kick_disconnect")
@@ -135,13 +234,15 @@ func sessionCapabilities(adapter playAdapter) limbgo.SessionCapabilities {
 		_, hasTitle = packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "title")
 	}
 	return limbgo.SessionCapabilities{
-		SystemMessage: hasSystemMessage,
-		ActionBar:     hasActionBar,
-		Title:         hasTitle,
-		Dialog:        hasDialog,
-		StoreCookie:   hasStoreCookie,
-		Transfer:      hasTransfer,
-		Disconnect:    hasDisconnect,
+		SystemMessage:      hasSystemMessage,
+		ActionBar:          hasActionBar,
+		Title:              hasTitle,
+		Dialog:             hasDialog,
+		ResourcePack:       hasResourcePack,
+		RemoveResourcePack: hasRemoveResourcePack,
+		StoreCookie:        hasStoreCookie,
+		Transfer:           hasTransfer,
+		Disconnect:         hasDisconnect,
 	}
 }
 
@@ -265,6 +366,15 @@ func handlePlayPacket(ctx context.Context, handler limbgo.PlayerEventHandler, se
 			return err
 		}
 		return handler.HandleDialogClick(ctx, session, event)
+	case isServerboundPlayPacket(adapter, packet.ID, "resource_pack_receive"):
+		event, err := session.readResourcePackResponse(packet.Data)
+		if err != nil {
+			return err
+		}
+		if resourceHandler, ok := handler.(limbgo.ResourcePackResponseHandler); ok {
+			return resourceHandler.HandleResourcePackResponse(ctx, session, event)
+		}
+		return nil
 	default:
 		return nil
 	}
@@ -273,6 +383,62 @@ func handlePlayPacket(ctx context.Context, handler limbgo.PlayerEventHandler, se
 func isServerboundPlayPacket(adapter playAdapter, got int32, name string) bool {
 	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToServer, name)
 	return ok && got == id
+}
+
+func hasClientboundPlayPacket(adapter playAdapter, name string) bool {
+	_, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, name)
+	return ok
+}
+
+func hasModernResourcePackID(adapter playAdapter) bool {
+	return hasClientboundPlayPacket(adapter, "add_resource_pack")
+}
+
+func readPacketUUID(reader *bytes.Reader) (string, error) {
+	var raw [16]byte
+	if _, err := io.ReadFull(reader, raw[:]); err != nil {
+		return "", err
+	}
+	id, err := uuid.FromBytes(raw[:])
+	if err != nil {
+		return "", err
+	}
+	return id.String(), nil
+}
+
+func resourcePackProtocolUUID(id string) string {
+	if parsed, err := uuid.Parse(id); err == nil {
+		return parsed.String()
+	}
+	sum := sha1.Sum([]byte("limbgo:resource-pack:" + id))
+	sum[6] = (sum[6] & 0x0f) | 0x50
+	sum[8] = (sum[8] & 0x3f) | 0x80
+	var out uuid.UUID
+	copy(out[:], sum[:])
+	return out.String()
+}
+
+func resourcePackStatus(status int32) limbgo.ResourcePackStatus {
+	switch status {
+	case 0:
+		return limbgo.ResourcePackSuccessfullyLoaded
+	case 1:
+		return limbgo.ResourcePackDeclined
+	case 2:
+		return limbgo.ResourcePackFailedDownload
+	case 3:
+		return limbgo.ResourcePackAccepted
+	case 4:
+		return limbgo.ResourcePackDownloaded
+	case 5:
+		return limbgo.ResourcePackInvalidURL
+	case 6:
+		return limbgo.ResourcePackFailedReload
+	case 7:
+		return limbgo.ResourcePackDiscarded
+	default:
+		return limbgo.ResourcePackStatus(fmt.Sprintf("unknown_%d", status))
+	}
 }
 
 func writeKeepAlive(conn net.Conn, adapter playAdapter, id int64) error {
@@ -594,6 +760,105 @@ func writeClearDialog(conn net.Conn, adapter playAdapter) error {
 		return fmt.Errorf("clear_dialog is not available for protocol %d", adapter.protocol)
 	}
 	return wire.WritePacket(conn, wire.Packet{ID: id})
+}
+
+func writeResourcePack(conn net.Conn, adapter playAdapter, pack limbgo.ResourcePack) error {
+	if pack.ID == "" {
+		return fmt.Errorf("%w: resource pack id is required", limbgo.ErrInvalidSessionControl)
+	}
+	if pack.URL == "" {
+		return fmt.Errorf("%w: resource pack url is required", limbgo.ErrInvalidSessionControl)
+	}
+	if id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "add_resource_pack"); ok {
+		var data bytes.Buffer
+		if err := writeUUID(&data, resourcePackProtocolUUID(pack.ID)); err != nil {
+			return err
+		}
+		if err := wire.WriteString(&data, pack.URL); err != nil {
+			return err
+		}
+		if err := wire.WriteString(&data, pack.Hash); err != nil {
+			return err
+		}
+		if err := wire.WriteBool(&data, pack.Required); err != nil {
+			return err
+		}
+		if err := writeOptionalResourcePackPrompt(&data, adapter, pack.Prompt); err != nil {
+			return err
+		}
+		return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+	}
+	id, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "resource_pack_send")
+	if !ok {
+		return fmt.Errorf("%w: resource pack protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	var data bytes.Buffer
+	if err := wire.WriteString(&data, pack.URL); err != nil {
+		return err
+	}
+	if err := wire.WriteString(&data, pack.Hash); err != nil {
+		return err
+	}
+	if adapter.protocol >= protocol757 {
+		if err := wire.WriteBool(&data, pack.Required); err != nil {
+			return err
+		}
+		if err := writeOptionalResourcePackPromptJSON(&data, adapter, pack.Prompt); err != nil {
+			return err
+		}
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data.Bytes()})
+}
+
+func writeRemoveResourcePack(conn net.Conn, adapter playAdapter, id string) error {
+	if id == "" {
+		return fmt.Errorf("%w: resource pack id is required", limbgo.ErrInvalidSessionControl)
+	}
+	packetID, ok := packetid.ID(adapter.packetProtocol, packetid.StatePlay, packetid.ToClient, "remove_resource_pack")
+	if !ok {
+		return fmt.Errorf("%w: remove_resource_pack protocol %d", limbgo.ErrUnsupportedCapability, adapter.protocol)
+	}
+	var data bytes.Buffer
+	if err := wire.WriteBool(&data, true); err != nil {
+		return err
+	}
+	if err := writeUUID(&data, resourcePackProtocolUUID(id)); err != nil {
+		return err
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: packetID, Data: data.Bytes()})
+}
+
+func writeOptionalResourcePackPrompt(data *bytes.Buffer, adapter playAdapter, prompt component.Component) error {
+	if prompt == nil {
+		return wire.WriteBool(data, false)
+	}
+	if err := wire.WriteBool(data, true); err != nil {
+		return err
+	}
+	raw, err := marshalComponentJSON(adapter.protocol, prompt)
+	if err != nil {
+		return err
+	}
+	nbt, err := componentJSONToAnonymousNBT(raw)
+	if err != nil {
+		return err
+	}
+	_, err = data.Write(nbt)
+	return err
+}
+
+func writeOptionalResourcePackPromptJSON(data *bytes.Buffer, adapter playAdapter, prompt component.Component) error {
+	if prompt == nil {
+		return wire.WriteBool(data, false)
+	}
+	if err := wire.WriteBool(data, true); err != nil {
+		return err
+	}
+	raw, err := marshalComponentJSON(adapter.protocol, prompt)
+	if err != nil {
+		return err
+	}
+	return wire.WriteString(data, string(raw))
 }
 
 func writeStoreCookie(conn net.Conn, adapter playAdapter, key string, value []byte) error {
