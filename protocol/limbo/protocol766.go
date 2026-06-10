@@ -66,6 +66,8 @@ type modernProtocolConfig struct {
 	protocol                       int32
 	packetIDProtocol               int32
 	dataProtocol                   int32
+	loginStartSignature            bool
+	loginStartUUID                 loginStartUUIDMode
 	preConfiguration               bool
 	preConfigurationDimensionNBT   bool
 	preConfigurationDeath          bool

@@ -33,6 +33,7 @@ const (
 // session proof is requested.
 type LoginRequest struct {
 	Username        string
+	ClaimedUUID     string
 	ProtocolVersion int
 	RemoteAddr      net.Addr
 	RequestedHost   string

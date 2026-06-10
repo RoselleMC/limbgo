@@ -8,6 +8,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"net"
@@ -247,16 +248,7 @@ func testModernPreConfigurationLoginAndChunk(t *testing.T, protocol int32) {
 	if err := writeHandshake(clientConn, protocol, "localhost", 25565, stateLogin); err != nil {
 		t.Fatalf("write handshake: %v", err)
 	}
-	var loginStart bytes.Buffer
-	if err := wire.WriteString(&loginStart, "TestPlayer"); err != nil {
-		t.Fatalf("write username: %v", err)
-	}
-	if err := wire.WriteBool(&loginStart, false); err != nil {
-		t.Fatalf("write uuid option: %v", err)
-	}
-	if err := wire.WritePacket(clientConn, wire.Packet{ID: 0, Data: loginStart.Bytes()}); err != nil {
-		t.Fatalf("write login_start: %v", err)
-	}
+	writeLoginStartPacket(t, clientConn, protocol, "TestPlayer", "")
 
 	reader := bufio.NewReader(clientConn)
 	assertPacketID(t, reader, protocol, packetid.StateLogin, "success")
@@ -352,6 +344,211 @@ func TestProtocolPolicyRejectsBeforeLoginStart(t *testing.T) {
 	}
 	if err := <-errCh; !errors.Is(err, limbgo.ErrProtocolRejected) {
 		t.Fatalf("router error = %v, want protocol rejected", err)
+	}
+}
+
+func TestReadLoginStartOptionalClaimedUUID(t *testing.T) {
+	var data bytes.Buffer
+	if err := wire.WriteString(&data, "TestPlayer"); err != nil {
+		t.Fatalf("write username: %v", err)
+	}
+	if err := wire.WriteBool(&data, true); err != nil {
+		t.Fatalf("write uuid option: %v", err)
+	}
+	writeUUIDString(t, &data, testClaimedUUID)
+
+	username, claimedUUID, err := readLoginStart(data.Bytes(), loginStartLayout{uuidMode: loginStartUUIDOptional})
+	if err != nil {
+		t.Fatalf("read login_start: %v", err)
+	}
+	if username != "TestPlayer" || claimedUUID != testClaimedUUID {
+		t.Fatalf("login_start username=%q claimedUUID=%q", username, claimedUUID)
+	}
+}
+
+func TestReadLoginStartOptionalClaimedUUIDAbsent(t *testing.T) {
+	var data bytes.Buffer
+	if err := wire.WriteString(&data, "TestPlayer"); err != nil {
+		t.Fatalf("write username: %v", err)
+	}
+	if err := wire.WriteBool(&data, false); err != nil {
+		t.Fatalf("write uuid option: %v", err)
+	}
+
+	username, claimedUUID, err := readLoginStart(data.Bytes(), loginStartLayout{uuidMode: loginStartUUIDOptional})
+	if err != nil {
+		t.Fatalf("read login_start: %v", err)
+	}
+	if username != "TestPlayer" || claimedUUID != "" {
+		t.Fatalf("login_start username=%q claimedUUID=%q", username, claimedUUID)
+	}
+}
+
+func TestReadLoginStartOldProtocolClaimedUUIDEmpty(t *testing.T) {
+	var data bytes.Buffer
+	if err := wire.WriteString(&data, "TestPlayer"); err != nil {
+		t.Fatalf("write username: %v", err)
+	}
+
+	username, claimedUUID, err := readLoginStart(data.Bytes(), loginStartLayout{})
+	if err != nil {
+		t.Fatalf("read login_start: %v", err)
+	}
+	if username != "TestPlayer" || claimedUUID != "" {
+		t.Fatalf("login_start username=%q claimedUUID=%q", username, claimedUUID)
+	}
+}
+
+func TestReadLoginStartMalformedClaimedUUIDRejected(t *testing.T) {
+	var data bytes.Buffer
+	if err := wire.WriteString(&data, "TestPlayer"); err != nil {
+		t.Fatalf("write username: %v", err)
+	}
+	if err := wire.WriteBool(&data, true); err != nil {
+		t.Fatalf("write uuid option: %v", err)
+	}
+	data.Write([]byte{1, 2, 3})
+
+	if _, _, err := readLoginStart(data.Bytes(), loginStartLayout{uuidMode: loginStartUUIDOptional}); err == nil {
+		t.Fatalf("read malformed login_start succeeded")
+	}
+}
+
+func TestProtocol340LoginPolicyReceivesEmptyClaimedUUID(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	gotReq := make(chan limbgo.LoginRequest, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginPolicy: limbgo.LoginPolicyFunc(func(_ context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {
+				gotReq <- req
+				return limbgo.LoginModeOffline, nil
+			}),
+		}.ServeConn(context.Background(), serverConn, testServices{
+			spawn: limbgo.SpawnTarget{World: "spawn", Position: limbgo.Vec3{X: 0, Y: 64, Z: 0}},
+			world: testWorld(),
+		})
+	}()
+
+	loginProtocol(t, clientConn, protocol340, false)
+	reader := bufio.NewReader(clientConn)
+	assertPacketID(t, reader, protocol340, packetid.StateLogin, "success")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "spawn_position")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "position")
+	assertPacketID(t, reader, protocol340, packetid.StatePlay, "map_chunk")
+
+	req := <-gotReq
+	if req.Username != "TestPlayer" || req.ClaimedUUID != "" || req.ProtocolVersion != int(protocol340) {
+		t.Fatalf("login request = %+v", req)
+	}
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol774LoginPolicyCanChooseOfflineBeforeEncryption(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	gotReq := make(chan limbgo.LoginRequest, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginPolicy: limbgo.LoginPolicyFunc(func(_ context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {
+				gotReq <- req
+				return limbgo.LoginModeOffline, nil
+			}),
+			SessionVerifier: limbgo.SessionVerifierFunc(func(context.Context, limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				t.Fatalf("session verifier must not be called for pre-session offline policy")
+				return limbgo.VerifiedProfile{}, nil
+			}),
+		}.ServeConn(context.Background(), serverConn, testServices{
+			spawn: limbgo.SpawnTarget{World: "spawn", Position: limbgo.Vec3{X: 0, Y: 64, Z: 0}},
+			world: testWorld(),
+		})
+	}()
+
+	loginProtocolWithUUID(t, clientConn, protocol774, testClaimedUUID)
+	reader := bufio.NewReader(clientConn)
+	assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
+		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "position")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	req := <-gotReq
+	if req.Username != "TestPlayer" || req.ClaimedUUID != testClaimedUUID || req.ProtocolVersion != int(protocol774) {
+		t.Fatalf("login request = %+v", req)
+	}
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol774LoginPolicyCanChooseOnlineFromClaimedUUID(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	gotReq := make(chan limbgo.LoginRequest, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginPolicy: limbgo.LoginPolicyFunc(func(_ context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {
+				gotReq <- req
+				if req.ClaimedUUID == testClaimedUUID {
+					return limbgo.LoginModeOnline, nil
+				}
+				return limbgo.LoginModeOffline, nil
+			}),
+			SessionVerifier: limbgo.SessionVerifierFunc(func(context.Context, limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				return limbgo.VerifiedProfile{
+					UUID:     testClaimedUUID,
+					Name:     "TestPlayer",
+					Source:   "test-verifier",
+					Verified: true,
+				}, nil
+			}),
+		}.ServeConn(context.Background(), serverConn, testServices{
+			spawn: limbgo.SpawnTarget{World: "spawn", Position: limbgo.Vec3{X: 0, Y: 64, Z: 0}},
+			world: testWorld(),
+		})
+	}()
+
+	loginProtocolWithUUID(t, clientConn, protocol774, testClaimedUUID)
+	reader := bufio.NewReader(clientConn)
+	encryptionRequest := assertPacketID(t, reader, protocol774, packetid.StateLogin, "encryption_begin")
+	sharedSecret := []byte("0123456789abcdef")
+	writeEncryptionResponseFromRequest(t, clientConn, protocol774, encryptionRequest.Data, sharedSecret)
+	encryptedConn, err := newEncryptedConn(clientConn, sharedSecret)
+	if err != nil {
+		t.Fatalf("new encrypted conn: %v", err)
+	}
+	encryptedReader := bufio.NewReader(encryptedConn)
+	success := assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "success")
+	assertModernLoginSuccess(t, success.Data, testClaimedUUID, "TestPlayer", 0)
+
+	req := <-gotReq
+	if req.Username != "TestPlayer" || req.ClaimedUUID != testClaimedUUID || req.ProtocolVersion != int(protocol774) {
+		t.Fatalf("login request = %+v", req)
+	}
+	_ = encryptedConn.Close()
+	if err := <-errCh; err == nil {
+		t.Fatalf("router error = nil, want close/read error after test closes connection")
 	}
 }
 
@@ -1110,13 +1307,7 @@ func testModernLoginConfigurationAndChunkWithPacketProtocol(t *testing.T, protoc
 	if err := writeHandshake(clientConn, protocol, "localhost", 25565, stateLogin); err != nil {
 		t.Fatalf("write handshake: %v", err)
 	}
-	var loginStart bytes.Buffer
-	if err := wire.WriteString(&loginStart, "TestPlayer"); err != nil {
-		t.Fatalf("write username: %v", err)
-	}
-	if err := wire.WritePacket(clientConn, wire.Packet{ID: 0, Data: loginStart.Bytes()}); err != nil {
-		t.Fatalf("write login_start: %v", err)
-	}
+	writeLoginStartPacket(t, clientConn, protocol, "TestPlayer", "")
 
 	reader := bufio.NewReader(clientConn)
 	assertPacketID(t, reader, packetProtocol, packetid.StateLogin, "success")
@@ -1997,20 +2188,83 @@ func writeServerboundNamedPacket(t *testing.T, conn net.Conn, protocol int32, st
 
 func loginProtocol(t *testing.T, conn net.Conn, protocol int32, uuidOption bool) {
 	t.Helper()
+	loginProtocolWithUUID(t, conn, protocol, "")
+}
+
+func loginProtocolWithUUID(t *testing.T, conn net.Conn, protocol int32, claimedUUID string) {
+	t.Helper()
 	if err := writeHandshake(conn, protocol, "localhost", 25565, stateLogin); err != nil {
 		t.Fatalf("write handshake: %v", err)
 	}
+	writeLoginStartPacket(t, conn, protocol, "TestPlayer", claimedUUID)
+}
+
+const testClaimedUUID = "12345678-1234-1234-9234-1234567890ab"
+
+func writeLoginStartPacket(t *testing.T, conn net.Conn, protocol int32, username string, claimedUUID string) {
+	t.Helper()
+	if err := wire.WritePacket(conn, wire.Packet{ID: 0, Data: loginStartPayload(t, protocol, username, claimedUUID)}); err != nil {
+		t.Fatalf("write login_start: %v", err)
+	}
+}
+
+func loginStartPayload(t *testing.T, protocol int32, username string, claimedUUID string) []byte {
+	t.Helper()
 	var loginStart bytes.Buffer
-	if err := wire.WriteString(&loginStart, "TestPlayer"); err != nil {
+	if err := wire.WriteString(&loginStart, username); err != nil {
 		t.Fatalf("write username: %v", err)
 	}
-	if uuidOption {
+	if protocol == protocol47 || protocol == protocol340 {
+		return loginStart.Bytes()
+	}
+	protocols, err := DefaultModernProtocols()
+	if err != nil {
+		t.Fatalf("load modern protocols: %v", err)
+	}
+	cfg, ok := protocols.configFor(protocol)
+	if !ok {
+		t.Fatalf("missing modern protocol config for %d", protocol)
+	}
+	if cfg.loginStartSignature {
 		if err := wire.WriteBool(&loginStart, false); err != nil {
-			t.Fatalf("write uuid option: %v", err)
+			t.Fatalf("write signature option: %v", err)
 		}
 	}
-	if err := wire.WritePacket(conn, wire.Packet{ID: 0, Data: loginStart.Bytes()}); err != nil {
-		t.Fatalf("write login_start: %v", err)
+	switch cfg.loginStartUUID {
+	case loginStartUUIDNone:
+	case loginStartUUIDOptional:
+		if claimedUUID == "" {
+			if err := wire.WriteBool(&loginStart, false); err != nil {
+				t.Fatalf("write uuid option: %v", err)
+			}
+			break
+		}
+		if err := wire.WriteBool(&loginStart, true); err != nil {
+			t.Fatalf("write uuid option: %v", err)
+		}
+		writeUUIDString(t, &loginStart, claimedUUID)
+	case loginStartUUIDRequired:
+		if claimedUUID == "" {
+			claimedUUID = testClaimedUUID
+		}
+		writeUUIDString(t, &loginStart, claimedUUID)
+	default:
+		t.Fatalf("unsupported login_start uuid mode %q", cfg.loginStartUUID)
+	}
+	return loginStart.Bytes()
+}
+
+func writeUUIDString(t *testing.T, data *bytes.Buffer, value string) {
+	t.Helper()
+	raw, err := hex.DecodeString(strings.ReplaceAll(value, "-", ""))
+	if err != nil {
+		t.Fatalf("decode uuid %q: %v", value, err)
+	}
+	if len(raw) != 16 {
+		t.Fatalf("uuid %q decoded to %d bytes", value, len(raw))
+	}
+	if _, err := data.Write(raw); err != nil {
+		t.Fatalf("write uuid: %v", err)
 	}
 }
 

@@ -148,7 +148,9 @@ the vanilla encryption/session proof flow. In online mode, empty
 `yggdrasil_base_url` uses Mojang's official sessionserver; a non-empty value is
 used as a custom Yggdrasil/sessionserver root. Application callbacks and hybrid
 per-connection policy are available through the Go API rather than the static
-JSON config.
+JSON config. A `LoginPolicy` receives the client-declared `ClaimedUUID` from
+`login_start` when that protocol carries one, allowing applications to choose
+offline or online mode before vanilla session proof starts.
 
 `world.schematic` is optional. When it is set, `world/schematic` loads the
 Sponge `.schem` file into a version-neutral world palette. Protocol adapters

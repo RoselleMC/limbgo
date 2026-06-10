@@ -13,23 +13,25 @@ import (
 var rawModernProtocolConfigs []byte
 
 type modernProtocolConfigRecord struct {
-	PacketIDProtocol               int32 `json:"packet_id_protocol"`
-	DataProtocol                   int32 `json:"data_protocol"`
-	PreConfiguration               bool  `json:"pre_configuration"`
-	PreConfigurationDimensionNBT   bool  `json:"pre_configuration_dimension_nbt"`
-	PreConfigurationDeath          bool  `json:"pre_configuration_death"`
-	PreConfigurationPortalCooldown bool  `json:"pre_configuration_portal_cooldown"`
-	PositionDismountVehicle        bool  `json:"position_dismount_vehicle"`
-	LoginSuccessNoProperties       bool  `json:"login_success_no_properties"`
-	StrictErrorHandling            bool  `json:"strict_error_handling"`
-	RegistryCodecNBT               bool  `json:"registry_codec_nbt"`
-	LegacyPlayLogin                bool  `json:"legacy_play_login"`
-	PositionV2                     bool  `json:"position_v2"`
-	SpawnInfoSeaLevel              bool  `json:"spawn_info_sea_level"`
-	PositionFlagsU32               bool  `json:"position_flags_u32"`
-	ChunkHeightmapArray            bool  `json:"chunk_heightmap_array"`
-	ChunkHeightmapFullNBT          bool  `json:"chunk_heightmap_full_nbt"`
-	ChunkTrustEdges                bool  `json:"chunk_trust_edges"`
+	PacketIDProtocol               int32  `json:"packet_id_protocol"`
+	DataProtocol                   int32  `json:"data_protocol"`
+	LoginStartSignature            bool   `json:"login_start_signature"`
+	LoginStartUUID                 string `json:"login_start_uuid"`
+	PreConfiguration               bool   `json:"pre_configuration"`
+	PreConfigurationDimensionNBT   bool   `json:"pre_configuration_dimension_nbt"`
+	PreConfigurationDeath          bool   `json:"pre_configuration_death"`
+	PreConfigurationPortalCooldown bool   `json:"pre_configuration_portal_cooldown"`
+	PositionDismountVehicle        bool   `json:"position_dismount_vehicle"`
+	LoginSuccessNoProperties       bool   `json:"login_success_no_properties"`
+	StrictErrorHandling            bool   `json:"strict_error_handling"`
+	RegistryCodecNBT               bool   `json:"registry_codec_nbt"`
+	LegacyPlayLogin                bool   `json:"legacy_play_login"`
+	PositionV2                     bool   `json:"position_v2"`
+	SpawnInfoSeaLevel              bool   `json:"spawn_info_sea_level"`
+	PositionFlagsU32               bool   `json:"position_flags_u32"`
+	ChunkHeightmapArray            bool   `json:"chunk_heightmap_array"`
+	ChunkHeightmapFullNBT          bool   `json:"chunk_heightmap_full_nbt"`
+	ChunkTrustEdges                bool   `json:"chunk_trust_edges"`
 }
 
 var (
@@ -99,10 +101,16 @@ func loadModernProtocolConfigs(raw []byte) (*ModernProtocols, error) {
 		if err != nil {
 			return nil, fmt.Errorf("parse protocol %q: %w", rawProtocol, err)
 		}
+		loginStartUUID := loginStartUUIDMode(record.LoginStartUUID)
+		if err := validateLoginStartUUIDMode(loginStartUUID); err != nil {
+			return nil, fmt.Errorf("parse protocol %d: %w", protocol, err)
+		}
 		configs[int32(protocol)] = modernProtocolConfig{
 			protocol:                       int32(protocol),
 			packetIDProtocol:               protocolAliasOrSelf(record.PacketIDProtocol, int32(protocol)),
 			dataProtocol:                   protocolAliasOrSelf(record.DataProtocol, int32(protocol)),
+			loginStartSignature:            record.LoginStartSignature,
+			loginStartUUID:                 loginStartUUID,
 			preConfiguration:               record.PreConfiguration,
 			preConfigurationDimensionNBT:   record.PreConfigurationDimensionNBT,
 			preConfigurationDeath:          record.PreConfigurationDeath,
@@ -121,6 +129,15 @@ func loadModernProtocolConfigs(raw []byte) (*ModernProtocols, error) {
 		}
 	}
 	return &ModernProtocols{configs: configs}, nil
+}
+
+func validateLoginStartUUIDMode(mode loginStartUUIDMode) error {
+	switch mode {
+	case loginStartUUIDNone, loginStartUUIDOptional, loginStartUUIDRequired:
+		return nil
+	default:
+		return fmt.Errorf("unsupported login_start_uuid mode %q", mode)
+	}
 }
 
 func protocolAliasOrSelf(alias, self int32) int32 {

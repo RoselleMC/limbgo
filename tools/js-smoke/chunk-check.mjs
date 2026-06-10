@@ -208,7 +208,7 @@ function rawCheckVersion(port, version) {
 
 		socket.on("connect", () => {
 			socket.write(packet(0, Buffer.alloc(0), { handshake: { protocol, host: "127.0.0.1", port } }));
-			socket.write(packet(ids.loginStart, Buffer.concat([writeString(`Raw${version.replaceAll(".", "")}`)])));
+			socket.write(packet(ids.loginStart, loginStartPayload(packetData, `Raw${version.replaceAll(".", "")}`)));
 		});
 		socket.on("data", (chunk) => {
 			buffer = Buffer.concat([buffer, chunk]);
@@ -321,6 +321,42 @@ function readFrame(buffer) {
 function writeString(value) {
 	const raw = Buffer.from(value, "utf8");
 	return Buffer.concat([writeVarInt(raw.length), raw]);
+}
+
+function loginStartPayload(data, username) {
+	const fields = data.protocol.login.toServer.types.packet_login_start[1];
+	const parts = [];
+	for (const field of fields) {
+		if (field.name === "username") {
+			parts.push(writeString(username));
+			continue;
+		}
+		if (field.name === "signature") {
+			parts.push(Buffer.from([0]));
+			continue;
+		}
+		if (field.name === "playerUUID") {
+			if (Array.isArray(field.type) && field.type[0] === "option") {
+				parts.push(Buffer.from([1]), deterministicUUID(username));
+			} else {
+				parts.push(deterministicUUID(username));
+			}
+			continue;
+		}
+		throw new Error(`${data.version.minecraftVersion}: unsupported login_start field ${field.name}`);
+	}
+	return Buffer.concat(parts);
+}
+
+function deterministicUUID(seed) {
+	const out = Buffer.alloc(16);
+	const raw = Buffer.from(seed, "utf8");
+	for (let i = 0; i < out.length; i++) {
+		out[i] = raw[i % raw.length] ^ ((i * 31) & 0xff);
+	}
+	out[6] = (out[6] & 0x0f) | 0x40;
+	out[8] = (out[8] & 0x3f) | 0x80;
+	return out;
 }
 
 function writeU16(value) {

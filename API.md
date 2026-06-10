@@ -147,7 +147,7 @@ session proof is requested:
 ```go
 router := limbo.Router{
 	LoginPolicy: limbgo.LoginPolicyFunc(func(ctx context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {
-		if shouldRequireOnline(req) {
+		if shouldRequireOnline(req.Username, req.ClaimedUUID) {
 			return limbgo.LoginModeOnline, nil
 		}
 		return limbgo.LoginModeOffline, nil
@@ -155,6 +155,12 @@ router := limbo.Router{
 	SessionVerifier: appVerifier,
 }
 ```
+
+`LoginRequest.ClaimedUUID` is the UUID declared by the client in `login_start`,
+formatted with dashes when the protocol version carries one. It is empty on
+older protocols or when an optional UUID field is absent. Treat it as a routing
+hint only; online-mode identity is still established exclusively by
+`SessionVerifier`.
 
 `Player` exposes both the selected mode and the resulting trust metadata:
 `LoginMode`, `AuthSource`, `Verified`, `Name`, `UUID`, `Properties`, and

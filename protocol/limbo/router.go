@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"sort"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"github.com/RoselleMC/limbgo/internal/protocol/wire"
 	"github.com/RoselleMC/limbgo/protocol/packetid"
 	"github.com/RoselleMC/limbgo/protocol/registrydata"
+	"github.com/google/uuid"
 	"go.minekube.com/common/minecraft/component"
 )
 
@@ -108,12 +110,13 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 		return fmt.Errorf("expected login_start packet %d, got %d", loginStartID, loginStart.ID)
 	}
 
-	username, err := readLoginStartUsername(loginStart.Data)
+	username, claimedUUID, err := readLoginStart(loginStart.Data, loginStartLayoutFor(hasModernConfig, cfg))
 	if err != nil {
 		return err
 	}
 	loginRequest := limbgo.LoginRequest{
 		Username:        username,
+		ClaimedUUID:     claimedUUID,
 		ProtocolVersion: int(info.ProtocolVersion),
 		RemoteAddr:      conn.RemoteAddr(),
 		RequestedHost:   info.Address,
@@ -381,15 +384,110 @@ func readHandshake(data []byte) (handshakeInfo, error) {
 	}, nil
 }
 
-func readLoginStartUsername(data []byte) (string, error) {
-	username, err := wire.ReadString(bytes.NewReader(data), 16)
+type loginStartUUIDMode string
+
+const (
+	loginStartUUIDNone     loginStartUUIDMode = ""
+	loginStartUUIDOptional loginStartUUIDMode = "optional"
+	loginStartUUIDRequired loginStartUUIDMode = "required"
+)
+
+type loginStartLayout struct {
+	signature bool
+	uuidMode  loginStartUUIDMode
+}
+
+func loginStartLayoutFor(modern bool, cfg modernProtocolConfig) loginStartLayout {
+	if !modern {
+		return loginStartLayout{}
+	}
+	return loginStartLayout{
+		signature: cfg.loginStartSignature,
+		uuidMode:  cfg.loginStartUUID,
+	}
+}
+
+func readLoginStart(data []byte, layout loginStartLayout) (string, string, error) {
+	reader := bytes.NewReader(data)
+	username, err := wire.ReadString(reader, 16)
+	if err != nil {
+		return "", "", err
+	}
+	if username == "" {
+		return "", "", fmt.Errorf("empty username")
+	}
+	if layout.signature {
+		hasSignature, err := readLoginBool(reader)
+		if err != nil {
+			return "", "", err
+		}
+		if hasSignature {
+			if _, err := wire.ReadLong(reader); err != nil {
+				return "", "", err
+			}
+			if _, err := readLoginByteArray(reader); err != nil {
+				return "", "", err
+			}
+			if _, err := readLoginByteArray(reader); err != nil {
+				return "", "", err
+			}
+		}
+	}
+	claimedUUID, err := readLoginStartUUID(reader, layout.uuidMode)
+	if err != nil {
+		return "", "", err
+	}
+	if reader.Len() != 0 {
+		return "", "", fmt.Errorf("login_start has %d trailing bytes", reader.Len())
+	}
+	return username, claimedUUID, nil
+}
+
+func readLoginStartUUID(reader *bytes.Reader, mode loginStartUUIDMode) (string, error) {
+	switch mode {
+	case loginStartUUIDNone:
+		return "", nil
+	case loginStartUUIDOptional:
+		hasUUID, err := readLoginBool(reader)
+		if err != nil {
+			return "", err
+		}
+		if !hasUUID {
+			return "", nil
+		}
+		return readLoginUUID(reader)
+	case loginStartUUIDRequired:
+		return readLoginUUID(reader)
+	default:
+		return "", fmt.Errorf("unsupported login_start uuid mode %q", mode)
+	}
+}
+
+func readLoginBool(reader *bytes.Reader) (bool, error) {
+	value, err := reader.ReadByte()
+	if err != nil {
+		return false, err
+	}
+	switch value {
+	case 0:
+		return false, nil
+	case 1:
+		return true, nil
+	default:
+		return false, fmt.Errorf("minecraft bool has invalid value %d", value)
+	}
+}
+
+func readLoginUUID(reader *bytes.Reader) (string, error) {
+	var raw [16]byte
+	if _, err := io.ReadFull(reader, raw[:]); err != nil {
+		return "", err
+	}
+	id, err := uuid.FromBytes(raw[:])
 	if err != nil {
 		return "", err
 	}
-	if username == "" {
-		return "", fmt.Errorf("empty username")
-	}
-	return username, nil
+	return id.String(), nil
 }
 
 func writeLoginDisconnect(conn net.Conn, protocol int32, message string) error {
