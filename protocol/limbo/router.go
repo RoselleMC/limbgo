@@ -47,6 +47,7 @@ type Router struct {
 	PreventsChatReports *bool
 	ModernProtocols     *ModernProtocols
 	RegistryData        *registrydata.Data
+	RegistryDataSource  registrydata.Source
 	ProtocolPolicy      limbgo.ProtocolPolicy
 	LoginMode           limbgo.LoginMode
 	LoginPolicy         limbgo.LoginPolicy
@@ -235,6 +236,9 @@ func (r Router) modernProtocols() (*ModernProtocols, error) {
 }
 
 func (r Router) registryData() (*registrydata.Data, error) {
+	if r.RegistryDataSource != nil {
+		return r.RegistryDataSource.RegistryData()
+	}
 	if r.RegistryData != nil {
 		return r.RegistryData, nil
 	}

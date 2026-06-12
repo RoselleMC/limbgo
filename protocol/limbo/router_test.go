@@ -254,8 +254,9 @@ func testModernPreConfigurationLoginAndChunk(t *testing.T, protocol int32) {
 	assertPacketID(t, reader, protocol, packetid.StateLogin, "success")
 	assertPacketID(t, reader, protocol, packetid.StatePlay, "login")
 	assertPacketID(t, reader, protocol, packetid.StatePlay, "position")
+	assertModernChunkViewPackets(t, reader, protocol)
 	chunkPacket := assertPacketID(t, reader, protocol, packetid.StatePlay, "map_chunk")
-	assertFirstChunkBlockModern(t, chunkPacket.Data, false, true, 1)
+	assertFirstChunkBlockModern(t, chunkPacket.Data, false, true, false, false, 1)
 
 	if err := <-errCh; err != nil {
 		t.Fatalf("router error: %v", err)
@@ -306,8 +307,8 @@ func TestProtocol774LoginConfigurationAndChunk(t *testing.T) {
 	testModernLoginConfigurationAndChunk(t, protocol774)
 }
 
-func TestProtocol775LoginConfigurationAliasAndChunk(t *testing.T) {
-	testModernLoginConfigurationAndChunkWithPacketProtocol(t, protocol775, protocol774)
+func TestProtocol775LoginConfigurationAndChunk(t *testing.T) {
+	testModernLoginConfigurationAndChunkWithPacketProtocol(t, protocol775, protocol775)
 }
 
 func TestProtocolPolicyRejectsBeforeLoginStart(t *testing.T) {
@@ -1183,12 +1184,12 @@ func TestProtocol774JoinEventCanOpenDialogWithoutChat(t *testing.T) {
 	}
 }
 
-func TestProtocol775DialogPacketAlias(t *testing.T) {
+func TestProtocol775DialogPacket(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 
 	errCh := make(chan error, 1)
 	go func() {
-		adapter := playAdapter{protocol: protocol775, packetProtocol: protocol774}
+		adapter := playAdapter{protocol: protocol775, packetProtocol: protocol775}
 		if err := writeShowDialog(serverConn, adapter, dialog.Notice(dialog.Common{
 			Title: dialog.Text("Alias"),
 		}, dialog.Button(dialog.Text("OK"), dialog.Custom("limbgo:ok", nil)))); err != nil {
@@ -1199,9 +1200,9 @@ func TestProtocol775DialogPacketAlias(t *testing.T) {
 	}()
 
 	reader := bufio.NewReader(clientConn)
-	dialogPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "show_dialog")
+	dialogPacket := assertPacketID(t, reader, protocol775, packetid.StatePlay, "show_dialog")
 	assertInlineDialogNBT(t, dialogPacket.Data)
-	assertPacketID(t, reader, protocol774, packetid.StatePlay, "clear_dialog")
+	assertPacketID(t, reader, protocol775, packetid.StatePlay, "clear_dialog")
 	_ = clientConn.Close()
 	if err := <-errCh; err != nil {
 		t.Fatalf("dialog alias write: %v", err)
@@ -1255,7 +1256,7 @@ func TestProtocol774ConfiguredWorldTime(t *testing.T) {
 }
 
 func TestLoadModernProtocolsBytesAndSupportedList(t *testing.T) {
-	protocols, err := LoadModernProtocolsBytes([]byte(`{"999":{"packet_id_protocol":774,"data_protocol":774,"position_v2":true}}`))
+	protocols, err := LoadModernProtocolsBytes([]byte(`{"999":{"packet_id_protocol":774,"data_protocol":774,"registry_data_protocol":775,"position_v2":true}}`))
 	if err != nil {
 		t.Fatalf("load modern protocols: %v", err)
 	}
@@ -1272,12 +1273,64 @@ func TestLoadModernProtocolsBytesAndSupportedList(t *testing.T) {
 	if cfg.dataProtocolID() != protocol774 {
 		t.Fatalf("protocol 999 data protocol = %d, want %d", cfg.dataProtocolID(), protocol774)
 	}
+	if cfg.registryDataProtocolID() != protocol775 {
+		t.Fatalf("protocol 999 registry data protocol = %d, want %d", cfg.registryDataProtocolID(), protocol775)
+	}
 	got := Router{ModernProtocols: protocols}.supportedPlayProtocols()
 	for _, want := range []string{"47", "340", "999"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("supported protocols %q missing %s", got, want)
 		}
 	}
+}
+
+func TestRouterUsesRegistryDataSourceForModernJoin(t *testing.T) {
+	data, err := registrydata.Default()
+	if err != nil {
+		t.Fatalf("load registry data: %v", err)
+	}
+	source := &countingRegistrySource{data: data}
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description:        "limbgo test",
+			RegistryDataSource: source,
+		}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	if err := writeHandshake(clientConn, protocol766, "localhost", 25565, stateLogin); err != nil {
+		t.Fatalf("write handshake: %v", err)
+	}
+	writeLoginStartPacket(t, clientConn, protocol766, "TestPlayer", "")
+	completeModernJoin(t, clientConn, bufio.NewReader(clientConn), protocol766, protocol766)
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+	if source.calls != 1 {
+		t.Fatalf("registry data source calls = %d, want 1", source.calls)
+	}
+}
+
+type countingRegistrySource struct {
+	data  *registrydata.Data
+	calls int
+}
+
+func (s *countingRegistrySource) RegistryData() (*registrydata.Data, error) {
+	s.calls++
+	return s.data, nil
 }
 
 func testModernLoginConfigurationAndChunk(t *testing.T, protocol int32) {
@@ -1325,9 +1378,10 @@ func testModernLoginConfigurationAndChunkWithPacketProtocol(t *testing.T, protoc
 
 	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "login")
 	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "position")
+	assertModernChunkViewPackets(t, reader, packetProtocol)
 	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "chunk_batch_start")
 	chunkPacket := assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "map_chunk")
-	assertFirstChunkBlockModern(t, chunkPacket.Data, protocol >= protocol770, false, 1)
+	assertFirstChunkBlockModern(t, chunkPacket.Data, protocol >= protocol770, false, protocol == protocol775, protocol == protocol775, 1)
 	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "chunk_batch_finished")
 
 	if err := <-errCh; err != nil {
@@ -1611,9 +1665,9 @@ func expectedRegistryPacketCount(t *testing.T, protocol int32) int {
 	if err != nil {
 		t.Fatalf("load registry data: %v", err)
 	}
-	registries, ok := data.Registries(cfg.dataProtocolID())
+	registries, ok := data.Registries(cfg.registryDataProtocolID())
 	if !ok {
-		t.Fatalf("missing registry data for protocol %d", cfg.dataProtocolID())
+		t.Fatalf("missing registry data for protocol %d", cfg.registryDataProtocolID())
 	}
 	return 1 + len(registries)
 }
@@ -1934,18 +1988,33 @@ func formatUUIDHex(value string) string {
 
 func assertPacketID(t *testing.T, reader *bufio.Reader, protocol int32, state packetid.State, name string) wire.Packet {
 	t.Helper()
-	packet, err := wire.ReadPacket(reader, 0)
-	if err != nil {
-		t.Fatalf("read %s packet: %v", name, err)
-	}
 	want, ok := packetid.ID(protocol, state, packetid.ToClient, name)
 	if !ok {
 		t.Fatalf("missing generated packet id for %s", name)
 	}
-	if packet.ID != want {
+	for skipped := 0; ; skipped++ {
+		packet, err := wire.ReadPacket(reader, 0)
+		if err != nil {
+			t.Fatalf("read %s packet: %v", name, err)
+		}
+		if packet.ID == want {
+			return packet
+		}
+		if (name == "chunk_batch_start" || name == "map_chunk") && skipped < 3 && isChunkViewPacket(protocol, state, packet.ID) {
+			continue
+		}
 		t.Fatalf("packet %s id = %#x, want %#x", name, packet.ID, want)
 	}
-	return packet
+}
+
+func isChunkViewPacket(protocol int32, state packetid.State, id int32) bool {
+	for _, name := range []string{"update_view_distance", "simulation_distance", "update_view_position"} {
+		packetID, ok := packetid.ID(protocol, state, packetid.ToClient, name)
+		if ok && packetID == id {
+			return true
+		}
+	}
+	return false
 }
 
 func assertInlineDialogNBT(t *testing.T, data []byte) {
@@ -2193,7 +2262,21 @@ func assertFirstChunkBlock340(t *testing.T, data []byte, want uint32) {
 	}
 }
 
-func assertFirstChunkBlockModern(t *testing.T, data []byte, heightmapArray bool, heightmapNamed bool, want uint32) {
+func assertFirstChunkBlockModern(t *testing.T, data []byte, heightmapArray bool, heightmapNamed bool, sectionFluidCount bool, fixedPalettedStorage bool, want uint32) {
+	t.Helper()
+	assertChunkBlockModern(t, data, heightmapArray, heightmapNamed, sectionFluidCount, fixedPalettedStorage, 0, 0, want)
+}
+
+func assertModernChunkViewPackets(t *testing.T, reader *bufio.Reader, protocol int32) {
+	t.Helper()
+	for _, name := range []string{"update_view_distance", "simulation_distance", "update_view_position"} {
+		if _, ok := packetid.ID(protocol, packetid.StatePlay, packetid.ToClient, name); ok {
+			assertPacketID(t, reader, protocol, packetid.StatePlay, name)
+		}
+	}
+}
+
+func assertChunkBlockModern(t *testing.T, data []byte, heightmapArray bool, heightmapNamed bool, sectionFluidCount bool, fixedPalettedStorage bool, sectionIndex int, blockIndex int, want uint32) {
 	t.Helper()
 	reader := bytes.NewReader(data)
 	if _, err := readInt32(reader); err != nil {
@@ -2241,46 +2324,96 @@ func assertFirstChunkBlockModern(t *testing.T, data []byte, heightmapArray bool,
 		t.Fatalf("read chunk data: %v", err)
 	}
 	section := bytes.NewReader(chunkData)
-	if _, err := readUint16(section); err != nil {
-		t.Fatalf("read non-air count: %v", err)
-	}
-	bitsPerBlock, err := section.ReadByte()
-	if err != nil {
-		t.Fatalf("read bits per block: %v", err)
-	}
-	if bitsPerBlock != 4 {
-		t.Fatalf("bits per block = %d, want 4", bitsPerBlock)
-	}
-	paletteLen, err := wire.ReadVarInt(section)
-	if err != nil {
-		t.Fatalf("read palette len: %v", err)
-	}
-	palette := make([]uint32, paletteLen)
-	for i := range palette {
-		value, err := wire.ReadVarInt(section)
-		if err != nil {
-			t.Fatalf("read palette entry %d: %v", i, err)
+	for currentSection := 0; currentSection <= sectionIndex; currentSection++ {
+		if _, err := readUint16(section); err != nil {
+			t.Fatalf("read section %d non-air count: %v", currentSection, err)
 		}
-		palette[i] = uint32(value)
+		if sectionFluidCount {
+			if _, err := readUint16(section); err != nil {
+				t.Fatalf("read section %d fluid count: %v", currentSection, err)
+			}
+		}
+		palette, longs, bitsPerBlock := readModernPalettedStorage(t, section, 4096, fixedPalettedStorage)
+		if currentSection == sectionIndex {
+			paletteIndex := packedPaletteIndex(t, longs, bitsPerBlock, blockIndex)
+			if int(paletteIndex) >= len(palette) {
+				t.Fatalf("palette index %d outside palette %+v", paletteIndex, palette)
+			}
+			if got := palette[paletteIndex]; got != want {
+				t.Fatalf("block state = %#x, want %#x (palette %+v)", got, want, palette)
+			}
+			return
+		}
+		_, _, _ = readModernPalettedStorage(t, section, 64, fixedPalettedStorage)
 	}
-	dataLen, err := wire.ReadVarInt(section)
+}
+
+func readModernPalettedStorage(t *testing.T, reader *bytes.Reader, entries int, fixedPalettedStorage bool) ([]uint32, []int64, byte) {
+	t.Helper()
+	bits, err := reader.ReadByte()
 	if err != nil {
-		t.Fatalf("read long array len: %v", err)
+		t.Fatalf("read bits per entry: %v", err)
 	}
-	if dataLen <= 0 {
-		t.Fatalf("long array len = %d", dataLen)
+	var palette []uint32
+	if bits == 0 {
+		value, err := wire.ReadVarInt(reader)
+		if err != nil {
+			t.Fatalf("read single palette entry: %v", err)
+		}
+		palette = []uint32{uint32(value)}
+	} else {
+		paletteLen, err := wire.ReadVarInt(reader)
+		if err != nil {
+			t.Fatalf("read palette len: %v", err)
+		}
+		palette = make([]uint32, paletteLen)
+		for i := range palette {
+			value, err := wire.ReadVarInt(reader)
+			if err != nil {
+				t.Fatalf("read palette entry %d: %v", i, err)
+			}
+			palette[i] = uint32(value)
+		}
 	}
-	firstLong, err := wire.ReadLong(section)
-	if err != nil {
-		t.Fatalf("read first packed long: %v", err)
+
+	var dataLen int32
+	if bits == 0 {
+		dataLen = 0
+	} else if fixedPalettedStorage {
+		dataLen = int32((entries*int(bits) + 63) / 64)
+	} else {
+		var err error
+		dataLen, err = wire.ReadVarInt(reader)
+		if err != nil {
+			t.Fatalf("read long array len: %v", err)
+		}
 	}
-	firstPaletteIndex := uint64(firstLong) & 0xf
-	if int(firstPaletteIndex) >= len(palette) {
-		t.Fatalf("first palette index %d outside palette %+v", firstPaletteIndex, palette)
+	longs := make([]int64, dataLen)
+	for i := range longs {
+		value, err := wire.ReadLong(reader)
+		if err != nil {
+			t.Fatalf("read packed long %d: %v", i, err)
+		}
+		longs[i] = value
 	}
-	if got := palette[firstPaletteIndex]; got != want {
-		t.Fatalf("first block state = %#x, want %#x (palette %+v)", got, want, palette)
+	return palette, longs, bits
+}
+
+func packedPaletteIndex(t *testing.T, longs []int64, bits byte, index int) uint32 {
+	t.Helper()
+	if bits == 0 {
+		return 0
 	}
+	if bits > 32 {
+		t.Fatalf("bits per entry = %d, too large for test helper", bits)
+	}
+	longIndex := index * int(bits) / 64
+	if longIndex >= len(longs) {
+		t.Fatalf("packed index %d outside long array len %d", longIndex, len(longs))
+	}
+	bitOffset := uint((index * int(bits)) % 64)
+	mask := uint64((1 << bits) - 1)
+	return uint32((uint64(longs[longIndex]) >> bitOffset) & mask)
 }
 
 func skipAnonymousNBT(reader *bytes.Reader) error {

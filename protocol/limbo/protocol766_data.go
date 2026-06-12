@@ -36,6 +36,7 @@ func dimensionTypeRegistry766(dimension limbgo.Dimension) registrydata.Registry 
 		n.writeByte("ultrawarm", boolByte(dimension.UltraWarm))
 		n.writeByte("has_ceiling", boolByte(dimension.HasCeiling))
 		n.writeInt("height", dimension.Height)
+		n.writeByte("has_ender_dragon_fight", boolByte(profile.hasEnderDragonFight))
 	})
 	return registrydata.Registry{
 		ID: "minecraft:dimension_type",
@@ -51,6 +52,7 @@ type dimensionProtocolSettings struct {
 	respawnAnchorWorks          bool
 	bedWorks                    bool
 	hasRaids                    bool
+	hasEnderDragonFight         bool
 	infiniburn                  string
 	monsterSpawnBlockLightLimit int32
 	monsterSpawnLightLevel      dimensionIntProvider
@@ -74,6 +76,7 @@ func dimensionProtocolProfile(environment limbgo.DimensionEnvironment) dimension
 			respawnAnchorWorks:     false,
 			bedWorks:               false,
 			hasRaids:               true,
+			hasEnderDragonFight:    true,
 			infiniburn:             "#minecraft:infiniburn_end",
 			monsterSpawnLightLevel: uniformDimensionInt(0, 7),
 		}
@@ -143,7 +146,7 @@ func writeHeightmapsArrayModern(data *bytes.Buffer) {
 	}
 }
 
-func encodeChunkDataModern(world limbgo.World, chunk limbgo.Chunk, protocol int32) []byte {
+func encodeChunkDataModern(world limbgo.World, chunk limbgo.Chunk, cfg modernProtocolConfig) []byte {
 	dimension := world.Dimension()
 	sectionCount := int(dimension.Height / 16)
 	if sectionCount <= 0 {
@@ -152,18 +155,22 @@ func encodeChunkDataModern(world limbgo.World, chunk limbgo.Chunk, protocol int3
 	var data bytes.Buffer
 	for i := 0; i < sectionCount; i++ {
 		sectionY := dimension.MinY/16 + int32(i)
-		writeSection766(&data, world.BlockPalette(), findSection(chunk, sectionY), protocol)
+		writeSection766(&data, world.BlockPalette(), findSection(chunk, sectionY), cfg)
 	}
 	return data.Bytes()
 }
 
-func writeSection766(data *bytes.Buffer, palette []limbgo.BlockState, section *limbgo.ChunkSection, protocol int32) {
+func writeSection766(data *bytes.Buffer, palette []limbgo.BlockState, section *limbgo.ChunkSection, cfg modernProtocolConfig) {
+	protocol := cfg.dataProtocolID()
 	_ = wire.WriteShort(data, int16(nonAirBlockCountModern(palette, section, protocol)))
-	writeBlockStates766(data, palette, section, protocol)
-	writeBiomes766(data)
+	if cfg.chunkSectionFluidCount {
+		_ = wire.WriteShort(data, 0)
+	}
+	writeBlockStates766(data, palette, section, protocol, cfg.chunkFixedPalettedStorage)
+	writeBiomes766(data, cfg.chunkFixedPalettedStorage)
 }
 
-func writeBlockStates766(data *bytes.Buffer, palette []limbgo.BlockState, section *limbgo.ChunkSection, protocol int32) {
+func writeBlockStates766(data *bytes.Buffer, palette []limbgo.BlockState, section *limbgo.ChunkSection, protocol int32, fixedPalettedStorage bool) {
 	_ = wire.WriteByte(data, 4)
 	localPalette := buildLocalPaletteModern(palette, section, protocol)
 	_ = wire.WriteVarInt(data, int32(len(localPalette)))
@@ -175,16 +182,20 @@ func writeBlockStates766(data *bytes.Buffer, palette []limbgo.BlockState, sectio
 		indexByState[state] = uint64(i)
 	}
 	longs := packSectionPaletteIndicesModern(palette, section, indexByState, protocol)
-	_ = wire.WriteVarInt(data, int32(len(longs)))
+	if !fixedPalettedStorage {
+		_ = wire.WriteVarInt(data, int32(len(longs)))
+	}
 	for _, value := range longs {
 		_ = wire.WriteLong(data, int64(value))
 	}
 }
 
-func writeBiomes766(data *bytes.Buffer) {
+func writeBiomes766(data *bytes.Buffer, fixedPalettedStorage bool) {
 	_ = wire.WriteByte(data, 0)
 	_ = wire.WriteVarInt(data, 0)
-	_ = wire.WriteVarInt(data, 0)
+	if !fixedPalettedStorage {
+		_ = wire.WriteVarInt(data, 0)
+	}
 }
 
 func buildLocalPaletteModern(palette []limbgo.BlockState, section *limbgo.ChunkSection, protocol int32) []uint32 {

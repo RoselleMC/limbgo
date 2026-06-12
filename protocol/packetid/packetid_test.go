@@ -33,6 +33,13 @@ func TestKeyPacketIDs(t *testing.T) {
 		{protocol: 774, state: StatePlay, direction: ToClient, name: "position", want: 0x46},
 		{protocol: 774, state: StatePlay, direction: ToClient, name: "chunk_batch_start", want: 0x0c},
 		{protocol: 774, state: StatePlay, direction: ToClient, name: "chunk_batch_finished", want: 0x0b},
+		{protocol: 775, state: StatePlay, direction: ToClient, name: "chunk_batch_start", want: 0x0c},
+		{protocol: 775, state: StatePlay, direction: ToClient, name: "map_chunk", want: 0x2d},
+		{protocol: 775, state: StatePlay, direction: ToClient, name: "update_light", want: 0x30},
+		{protocol: 775, state: StatePlay, direction: ToClient, name: "position", want: 0x48},
+		{protocol: 775, state: StatePlay, direction: ToClient, name: "update_view_position", want: 0x5e},
+		{protocol: 775, state: StatePlay, direction: ToClient, name: "update_view_distance", want: 0x5f},
+		{protocol: 775, state: StatePlay, direction: ToClient, name: "simulation_distance", want: 0x6f},
 	}
 
 	for _, tt := range cases {

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/base64"
 	"encoding/binary"
@@ -14,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -108,6 +110,15 @@ type encodedData struct {
 	Dimensions      map[string]string               `json:"dimensions"`
 }
 
+type encodedProtocolData struct {
+	FormatVersion  int                  `json:"format_version,omitempty"`
+	Protocol       int32                `json:"protocol,omitempty"`
+	Registries     []encodedRegistry    `json:"registries,omitempty"`
+	Tags           []encodedTagRegistry `json:"tags,omitempty"`
+	DimensionCodec string               `json:"dimension_codec,omitempty"`
+	Dimension      string               `json:"dimension,omitempty"`
+}
+
 type encodedRegistry struct {
 	ID      string         `json:"id"`
 	Entries []encodedEntry `json:"entries"`
@@ -137,23 +148,45 @@ type itemJSON struct {
 func main() {
 	var pcDataDir string
 	var outPath string
+	var outDir string
+	var zipOut string
 	flag.StringVar(&pcDataDir, "pc-data", "", "path to minecraft-data/data/pc")
-	flag.StringVar(&outPath, "out", "", "output Go file")
+	flag.StringVar(&outPath, "out", "", "output legacy aggregate JSON file")
+	flag.StringVar(&outDir, "out-dir", "", "output directory for per-protocol JSON files")
+	flag.StringVar(&zipOut, "zip-out", "", "output zip containing per-protocol JSON files")
 	flag.Parse()
 
-	if pcDataDir == "" || outPath == "" {
-		fatalf("-pc-data and -out are required")
+	if pcDataDir == "" || (outPath == "" && outDir == "" && zipOut == "") {
+		fatalf("-pc-data and one of -out, -out-dir, or -zip-out are required")
 	}
 	data, err := readProtocolRegistries(pcDataDir)
 	if err != nil {
 		fatalf("%v", err)
 	}
-	source, err := render(data)
-	if err != nil {
-		fatalf("%v", err)
+	if outPath != "" {
+		source, err := render(data)
+		if err != nil {
+			fatalf("%v", err)
+		}
+		if err := os.WriteFile(outPath, source, 0o644); err != nil {
+			fatalf("write %s: %v", outPath, err)
+		}
 	}
-	if err := os.WriteFile(outPath, source, 0o644); err != nil {
-		fatalf("write %s: %v", outPath, err)
+	if outDir != "" || zipOut != "" {
+		files, err := renderProtocolFiles(data)
+		if err != nil {
+			fatalf("%v", err)
+		}
+		if outDir != "" {
+			if err := writeProtocolDir(outDir, files); err != nil {
+				fatalf("%v", err)
+			}
+		}
+		if zipOut != "" {
+			if err := writeProtocolZip(zipOut, files); err != nil {
+				fatalf("%v", err)
+			}
+		}
 	}
 }
 
@@ -861,6 +894,119 @@ func render(data generatedData) ([]byte, error) {
 		return nil, fmt.Errorf("encode registry data: %w", err)
 	}
 	return append(source, '\n'), nil
+}
+
+func renderProtocolFiles(data generatedData) (map[string][]byte, error) {
+	files := map[string][]byte{}
+	ids := make([]int, 0, len(data.Registries))
+	for protocol := range data.Registries {
+		ids = append(ids, int(protocol))
+	}
+	sort.Ints(ids)
+	for _, id := range ids {
+		protocol := int32(id)
+		encoded := encodedProtocolData{FormatVersion: 1, Protocol: protocol}
+		for _, registry := range data.Registries[protocol] {
+			outRegistry := encodedRegistry{ID: registry.ID}
+			for _, entry := range registry.Entries {
+				outRegistry.Entries = append(outRegistry.Entries, encodedEntry{
+					Key:   entry.Key,
+					Value: base64.StdEncoding.EncodeToString(entry.Value),
+				})
+			}
+			encoded.Registries = append(encoded.Registries, outRegistry)
+		}
+		for _, registry := range data.Tags[protocol] {
+			outRegistry := encodedTagRegistry{ID: registry.ID}
+			for _, tag := range registry.Tags {
+				outRegistry.Tags = append(outRegistry.Tags, encodedTag{
+					Key:    tag.Key,
+					Values: append([]int32(nil), tag.Values...),
+				})
+			}
+			encoded.Tags = append(encoded.Tags, outRegistry)
+		}
+		if codec := data.Codecs[protocol]; len(codec) > 0 {
+			encoded.DimensionCodec = base64.StdEncoding.EncodeToString(codec)
+		}
+		if dimension := data.Dimensions[protocol]; len(dimension) > 0 {
+			encoded.Dimension = base64.StdEncoding.EncodeToString(dimension)
+		}
+		source, err := json.MarshalIndent(encoded, "", "  ")
+		if err != nil {
+			return nil, fmt.Errorf("encode protocol %d registry data: %w", protocol, err)
+		}
+		files[strconv.Itoa(id)+".json"] = append(source, '\n')
+	}
+	return files, nil
+}
+
+func writeProtocolDir(outDir string, files map[string][]byte) error {
+	if err := os.MkdirAll(outDir, 0o755); err != nil {
+		return fmt.Errorf("create %s: %w", outDir, err)
+	}
+	entries, err := os.ReadDir(outDir)
+	if err != nil {
+		return fmt.Errorf("read %s: %w", outDir, err)
+	}
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		if err := os.Remove(filepath.Join(outDir, entry.Name())); err != nil {
+			return fmt.Errorf("remove stale protocol file %s: %w", entry.Name(), err)
+		}
+	}
+	names := sortedFileNames(files)
+	for _, name := range names {
+		path := filepath.Join(outDir, name)
+		if err := os.WriteFile(path, files[name], 0o644); err != nil {
+			return fmt.Errorf("write %s: %w", path, err)
+		}
+	}
+	return nil
+}
+
+func writeProtocolZip(zipOut string, files map[string][]byte) error {
+	if err := os.MkdirAll(filepath.Dir(zipOut), 0o755); err != nil {
+		return fmt.Errorf("create zip dir: %w", err)
+	}
+	var buf bytes.Buffer
+	writer := zip.NewWriter(&buf)
+	modTime := time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, name := range sortedFileNames(files) {
+		header := &zip.FileHeader{
+			Name:     name,
+			Method:   zip.Deflate,
+			Modified: modTime,
+		}
+		header.SetMode(0o644)
+		file, err := writer.CreateHeader(header)
+		if err != nil {
+			_ = writer.Close()
+			return fmt.Errorf("create zip entry %s: %w", name, err)
+		}
+		if _, err := file.Write(files[name]); err != nil {
+			_ = writer.Close()
+			return fmt.Errorf("write zip entry %s: %w", name, err)
+		}
+	}
+	if err := writer.Close(); err != nil {
+		return fmt.Errorf("close zip: %w", err)
+	}
+	if err := os.WriteFile(zipOut, buf.Bytes(), 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", zipOut, err)
+	}
+	return nil
+}
+
+func sortedFileNames(files map[string][]byte) []string {
+	names := make([]string, 0, len(files))
+	for name := range files {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func byteList(values []byte) string {

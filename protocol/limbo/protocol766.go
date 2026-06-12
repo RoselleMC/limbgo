@@ -52,6 +52,9 @@ func serveModernPreConfigurationProtocol(ctx context.Context, conn net.Conn, ser
 	if err := writeUpdateTime(cfg.packetProtocol(), conn, world); err != nil {
 		return err
 	}
+	if err := writeChunkViewModern(conn, spawn, cfg); err != nil {
+		return err
+	}
 	chunk, ok := world.Chunk(chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
 	if !ok {
 		return fmt.Errorf("%w: spawn chunk %d,%d", limbgo.ErrWorldNotFound, chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
@@ -66,6 +69,7 @@ type modernProtocolConfig struct {
 	protocol                       int32
 	packetIDProtocol               int32
 	dataProtocol                   int32
+	registryDataProtocol           int32
 	loginStartSignature            bool
 	loginStartUUID                 loginStartUUIDMode
 	preConfiguration               bool
@@ -83,6 +87,8 @@ type modernProtocolConfig struct {
 	chunkHeightmapArray            bool
 	chunkHeightmapFullNBT          bool
 	chunkTrustEdges                bool
+	chunkSectionFluidCount         bool
+	chunkFixedPalettedStorage      bool
 }
 
 func (cfg modernProtocolConfig) packetProtocol() int32 {
@@ -97,6 +103,13 @@ func (cfg modernProtocolConfig) dataProtocolID() int32 {
 		return cfg.dataProtocol
 	}
 	return cfg.protocol
+}
+
+func (cfg modernProtocolConfig) registryDataProtocolID() int32 {
+	if cfg.registryDataProtocol != 0 {
+		return cfg.registryDataProtocol
+	}
+	return cfg.dataProtocolID()
 }
 
 func serveModernProtocol(ctx context.Context, conn net.Conn, reader *bufio.Reader, services limbgo.SessionServices, player limbgo.Player, cfg modernProtocolConfig, registryData *registrydata.Data) error {
@@ -151,6 +164,9 @@ func serveModernProtocol(ctx context.Context, conn net.Conn, reader *bufio.Reade
 		return err
 	}
 	if err := writeUpdateTime(cfg.packetProtocol(), conn, world); err != nil {
+		return err
+	}
+	if err := writeChunkViewModern(conn, spawn, cfg); err != nil {
 		return err
 	}
 	chunk, ok := world.Chunk(chunkCoord(spawn.Position.X), chunkCoord(spawn.Position.Z))
@@ -258,7 +274,7 @@ func writeLoginSuccessProperties(data *bytes.Buffer, properties []limbgo.Profile
 }
 
 func writeRegistryCodecModern(conn net.Conn, cfg modernProtocolConfig, registryData *registrydata.Data) error {
-	protocol := cfg.dataProtocolID()
+	protocol := cfg.registryDataProtocolID()
 	codec, ok := registryData.DimensionCodec(protocol)
 	if !ok {
 		return fmt.Errorf("no generated dimension codec for protocol %d", protocol)
@@ -267,7 +283,7 @@ func writeRegistryCodecModern(conn net.Conn, cfg modernProtocolConfig, registryD
 }
 
 func writeRegistryDataModern(conn net.Conn, world limbgo.World, cfg modernProtocolConfig, registryData *registrydata.Data) error {
-	protocol := cfg.dataProtocolID()
+	protocol := cfg.registryDataProtocolID()
 	registries, ok := registryData.Registries(protocol)
 	if !ok {
 		return fmt.Errorf("no generated registry data for protocol %d", protocol)
@@ -300,7 +316,7 @@ func writeRegistryDataModern(conn net.Conn, world limbgo.World, cfg modernProtoc
 }
 
 func writeTagsModern(conn net.Conn, cfg modernProtocolConfig, registryData *registrydata.Data) error {
-	tags, _ := registryData.Tags(cfg.dataProtocolID())
+	tags, _ := registryData.Tags(cfg.registryDataProtocolID())
 	var data bytes.Buffer
 	if err := wire.WriteVarInt(&data, int32(len(tags))); err != nil {
 		return err
@@ -331,7 +347,7 @@ func writeTagsModern(conn net.Conn, cfg modernProtocolConfig, registryData *regi
 
 func writeJoinGamePreConfigurationModern(conn net.Conn, spawn limbgo.SpawnTarget, world limbgo.World, cfg modernProtocolConfig, registryData *registrydata.Data) error {
 	dimensionName := limbgo.NormalizeDimension(world.Dimension(), 256).Name
-	codec, ok := registryData.DimensionCodec(cfg.dataProtocolID())
+	codec, ok := registryData.DimensionCodec(cfg.registryDataProtocolID())
 	if !ok {
 		return fmt.Errorf("no generated dimension codec for protocol %d", cfg.protocol)
 	}
@@ -358,7 +374,7 @@ func writeJoinGamePreConfigurationModern(conn net.Conn, spawn limbgo.SpawnTarget
 		return err
 	}
 	if cfg.preConfigurationDimensionNBT {
-		dimension, ok := registryData.Dimension(cfg.dataProtocolID())
+		dimension, ok := registryData.Dimension(cfg.registryDataProtocolID())
 		if !ok {
 			return fmt.Errorf("no generated dimension for protocol %d", cfg.protocol)
 		}
@@ -600,7 +616,7 @@ func writePlayerPositionModern(conn net.Conn, spawn limbgo.SpawnTarget, cfg mode
 }
 
 func writeMapChunkModern(conn net.Conn, world limbgo.World, chunk limbgo.Chunk, cfg modernProtocolConfig) error {
-	chunkData := encodeChunkDataModern(world, chunk, cfg.dataProtocolID())
+	chunkData := encodeChunkDataModern(world, chunk, cfg)
 	var data bytes.Buffer
 	if err := wire.WriteInt(&data, chunk.X); err != nil {
 		return err
@@ -637,6 +653,33 @@ func writeMapChunkModern(conn net.Conn, world limbgo.World, chunk limbgo.Chunk, 
 	return writeNamedPacketModern(conn, cfg, packetid.StatePlay, "map_chunk", data.Bytes())
 }
 
+func writeChunkViewModern(conn net.Conn, spawn limbgo.SpawnTarget, cfg modernProtocolConfig) error {
+	chunkX := chunkCoord(spawn.Position.X)
+	chunkZ := chunkCoord(spawn.Position.Z)
+	if err := writeOptionalVarIntPacketModern(conn, cfg, "update_view_distance", 2); err != nil {
+		return err
+	}
+	if err := writeOptionalVarIntPacketModern(conn, cfg, "simulation_distance", 2); err != nil {
+		return err
+	}
+	var center bytes.Buffer
+	if err := wire.WriteVarInt(&center, chunkX); err != nil {
+		return err
+	}
+	if err := wire.WriteVarInt(&center, chunkZ); err != nil {
+		return err
+	}
+	return writeOptionalNamedPacketModern(conn, cfg, packetid.StatePlay, "update_view_position", center.Bytes())
+}
+
+func writeOptionalVarIntPacketModern(conn net.Conn, cfg modernProtocolConfig, name string, value int32) error {
+	var data bytes.Buffer
+	if err := wire.WriteVarInt(&data, value); err != nil {
+		return err
+	}
+	return writeOptionalNamedPacketModern(conn, cfg, packetid.StatePlay, name, data.Bytes())
+}
+
 func writeChunkBatchFinishedModern(conn net.Conn, size int32, cfg modernProtocolConfig) error {
 	var data bytes.Buffer
 	if err := wire.WriteVarInt(&data, size); err != nil {
@@ -649,6 +692,14 @@ func writeNamedPacketModern(conn net.Conn, cfg modernProtocolConfig, state packe
 	id, ok := packetid.ID(cfg.packetProtocol(), state, packetid.ToClient, name)
 	if !ok {
 		return fmt.Errorf("missing packet id for protocol %d using packet protocol %d state %s packet %s", cfg.protocol, cfg.packetProtocol(), state, name)
+	}
+	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data})
+}
+
+func writeOptionalNamedPacketModern(conn net.Conn, cfg modernProtocolConfig, state packetid.State, name string, data []byte) error {
+	id, ok := packetid.ID(cfg.packetProtocol(), state, packetid.ToClient, name)
+	if !ok {
+		return nil
 	}
 	return wire.WritePacket(conn, wire.Packet{ID: id, Data: data})
 }

@@ -35,18 +35,37 @@ Generated artifacts are produced from `minecraft-data/data/pc`:
 - `protocol/versions/versions_gen.go`
 - `protocol/packetid/packetid_gen.go`
 - `protocol/blockstate/blockstate_gen.go`
-- `protocol/registrydata/registrydata.json`
+- `protocol/registrydata/protocols/<protocol>.json`
+- `protocol/registrydata/registrydata.zip`
 
 Version-specific compatibility switches for the modern configuration/play flow
 live in `protocol/limbo/modern_protocols.json`, so adding a compatible protocol
-line should normally start as data/config work before adding Go code. When a
-new protocol keeps the same packet/data shape, `packet_id_protocol` and
-`data_protocol` can point at the latest generated baseline.
+line should normally start as data/config work before adding Go code. Registry
+data follows a ViaVersion-style resource boundary: every protocol has its own
+full registry/tag file, and the embedded binary includes a zip bundle of those
+files. When a new protocol keeps the same packet/chunk shape,
+`packet_id_protocol` and `data_protocol` can point at the latest generated
+baseline. If only the configuration registries changed, `registry_data_protocol`
+can point at newer registry/tag data, and API users can hot-swap a registry zip
+for new connections without restarting the server instance.
 
-Regenerate them with:
+Regenerate packet IDs, versions, and block-state tables with:
 
 ```sh
-MINECRAFT_DATA_PC_DIR=/path/to/minecraft-data/data/pc go generate ./protocol/...
+MINECRAFT_DATA_PC_DIR=/path/to/minecraft-data/data/pc go generate ./protocol/versions ./protocol/packetid ./protocol/blockstate
+```
+
+Regenerate registry protocol files and their zip bundle with:
+
+```sh
+go run ./tools/mcregistry-gen -pc-data /path/to/minecraft-data/data/pc -out-dir protocol/registrydata/protocols -zip-out protocol/registrydata/registrydata.zip
+```
+
+If you only changed files under `protocol/registrydata/protocols`, rebuild the
+embedded zip with:
+
+```sh
+go generate ./protocol/registrydata
 ```
 
 ## Verification
@@ -109,7 +128,7 @@ The standalone command expects a small JSON config:
   },
   "protocol": {
     "modern_protocols": "protocol/limbo/modern_protocols.json",
-    "registry_data": "protocol/registrydata/registrydata.json"
+    "registry_data": "protocol/registrydata/registrydata.zip"
   },
   "world": {
     "id": "spawn",
@@ -139,8 +158,9 @@ The standalone command expects a small JSON config:
 ```
 
 The `protocol` paths are optional. When omitted, the binary uses the embedded
-generated defaults. Supplying them is useful when testing a new protocol line or
-regenerated registry data without changing Go source.
+generated defaults. `registry_data` can point at the generated zip bundle or a
+legacy aggregate JSON file. Supplying these paths is useful when testing a new
+protocol line or regenerated registry data without changing Go source.
 
 `auth` is optional. The default mode is `offline`, which accepts the claimed
 username and marks `Player.Verified` false. Set `auth.mode` to `online` to run
@@ -196,8 +216,11 @@ early end-to-end baselines:
   protocol lines use generated minimal biome/chat/damage registry data, a
   runtime dimension_type, heightmaps, light data, and modern paletted chunk
   sections. Protocol 770+ uses the newer heightmap array / ByteArray chunk
-  packet shape. Protocol 775 currently uses the configured compatibility alias
-  to reuse protocol 774 packet IDs and generated data.
+  packet shape. Protocol 775 uses a packet ID overlay derived from the 26.1.2
+  client protocol details and dedicated full registry/tag data for
+  configuration validation. Its chunk section storage uses the newer fixed
+  paletted long-array shape, while block-state IDs still reuse the protocol 774
+  translator until a newer block state table is available.
 
 Newer protocol lines are intentionally still rejected during login until their
 generated serializers are implemented. Server-list status/ping works through the

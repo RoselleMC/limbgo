@@ -73,6 +73,7 @@ func main() {
 		ProtocolRouter: router,
 		Worlds:         limbgo.StaticWorldProvider{world.ID(): world},
 		SpawnResolver:  limbgo.StaticSpawn(fileCfg.SpawnTarget()),
+		Events:         limbgo.PlayerEventHandlerFuncs{},
 		Logger:         slog.Default(),
 	})
 	if err != nil {

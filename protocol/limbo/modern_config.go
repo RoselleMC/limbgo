@@ -15,6 +15,7 @@ var rawModernProtocolConfigs []byte
 type modernProtocolConfigRecord struct {
 	PacketIDProtocol               int32  `json:"packet_id_protocol"`
 	DataProtocol                   int32  `json:"data_protocol"`
+	RegistryDataProtocol           int32  `json:"registry_data_protocol"`
 	LoginStartSignature            bool   `json:"login_start_signature"`
 	LoginStartUUID                 string `json:"login_start_uuid"`
 	PreConfiguration               bool   `json:"pre_configuration"`
@@ -32,6 +33,8 @@ type modernProtocolConfigRecord struct {
 	ChunkHeightmapArray            bool   `json:"chunk_heightmap_array"`
 	ChunkHeightmapFullNBT          bool   `json:"chunk_heightmap_full_nbt"`
 	ChunkTrustEdges                bool   `json:"chunk_trust_edges"`
+	ChunkSectionFluidCount         bool   `json:"chunk_section_fluid_count"`
+	ChunkFixedPalettedStorage      bool   `json:"chunk_fixed_paletted_storage"`
 }
 
 var (
@@ -109,6 +112,7 @@ func loadModernProtocolConfigs(raw []byte) (*ModernProtocols, error) {
 			protocol:                       int32(protocol),
 			packetIDProtocol:               protocolAliasOrSelf(record.PacketIDProtocol, int32(protocol)),
 			dataProtocol:                   protocolAliasOrSelf(record.DataProtocol, int32(protocol)),
+			registryDataProtocol:           protocolAliasOrSelf(record.RegistryDataProtocol, protocolAliasOrSelf(record.DataProtocol, int32(protocol))),
 			loginStartSignature:            record.LoginStartSignature,
 			loginStartUUID:                 loginStartUUID,
 			preConfiguration:               record.PreConfiguration,
@@ -126,6 +130,8 @@ func loadModernProtocolConfigs(raw []byte) (*ModernProtocols, error) {
 			chunkHeightmapArray:            record.ChunkHeightmapArray,
 			chunkHeightmapFullNBT:          record.ChunkHeightmapFullNBT,
 			chunkTrustEdges:                record.ChunkTrustEdges,
+			chunkSectionFluidCount:         record.ChunkSectionFluidCount,
+			chunkFixedPalettedStorage:      record.ChunkFixedPalettedStorage,
 		}
 	}
 	return &ModernProtocols{configs: configs}, nil

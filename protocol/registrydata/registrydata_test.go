@@ -1,9 +1,12 @@
 package registrydata
 
-import "testing"
+import (
+	"bytes"
+	"testing"
+)
 
 func TestRegistriesIncludeModernBaselineEntries(t *testing.T) {
-	for _, protocol := range []int32{766, 767, 768, 769, 770, 771, 772, 773, 774} {
+	for _, protocol := range []int32{766, 767, 768, 769, 770, 771, 772, 773, 774, 775} {
 		registries, ok := Registries(protocol)
 		if !ok {
 			t.Fatalf("protocol %d has no generated registries", protocol)
@@ -26,6 +29,144 @@ func TestRegistriesIncludeModernBaselineEntries(t *testing.T) {
 				t.Fatalf("protocol %d missing generated entry %s", protocol, key)
 			}
 		}
+	}
+}
+
+func TestEmbeddedZipLoadsProtocolRegistryFiles(t *testing.T) {
+	data, err := LoadZipBytes(embeddedZip)
+	if err != nil {
+		t.Fatalf("load embedded registry zip: %v", err)
+	}
+	if _, ok := data.Registries(775); !ok {
+		t.Fatalf("embedded registry zip missing protocol 775 registries")
+	}
+	if _, ok := data.Tags(775); !ok {
+		t.Fatalf("embedded registry zip missing protocol 775 tags")
+	}
+}
+
+func TestLoadFileAcceptsRegistryZip(t *testing.T) {
+	data, err := LoadFile("registrydata.zip")
+	if err != nil {
+		t.Fatalf("load registrydata.zip: %v", err)
+	}
+	if _, ok := data.Registries(774); !ok {
+		t.Fatalf("registrydata.zip missing protocol 774 registries")
+	}
+}
+
+func TestStoreCanHotUpdateFromZip(t *testing.T) {
+	store, err := NewStoreFromZip(embeddedZip)
+	if err != nil {
+		t.Fatalf("new store from zip: %v", err)
+	}
+	if err := store.UpdateZip(embeddedZip); err != nil {
+		t.Fatalf("hot update store from zip: %v", err)
+	}
+	data, err := store.RegistryData()
+	if err != nil {
+		t.Fatalf("store snapshot: %v", err)
+	}
+	if _, ok := data.Registries(775); !ok {
+		t.Fatalf("hot-updated store missing protocol 775 registries")
+	}
+}
+
+func TestProtocol775WolfVariantsIncludeBabyAssets(t *testing.T) {
+	registries, ok := Registries(775)
+	if !ok {
+		t.Fatalf("protocol 775 has no generated registries")
+	}
+	for _, registry := range registries {
+		if registry.ID != "minecraft:wolf_variant" {
+			continue
+		}
+		if len(registry.Entries) == 0 {
+			t.Fatalf("protocol 775 wolf_variant has no entries")
+		}
+		for _, entry := range registry.Entries {
+			if !bytes.Contains(entry.Value, []byte("baby_assets")) {
+				t.Fatalf("protocol 775 wolf_variant %s missing baby_assets", entry.Key)
+			}
+		}
+		return
+	}
+	t.Fatalf("protocol 775 missing wolf_variant registry")
+}
+
+func TestProtocol775WolfSoundVariantsIncludeAgeSplitSounds(t *testing.T) {
+	expectedEntries := map[string][]string{
+		"minecraft:cat_sound_variant":     {"minecraft:classic", "minecraft:royal"},
+		"minecraft:chicken_sound_variant": {"minecraft:classic", "minecraft:picky"},
+		"minecraft:pig_sound_variant":     {"minecraft:big", "minecraft:classic", "minecraft:mini"},
+		"minecraft:wolf_sound_variant":    {"minecraft:angry", "minecraft:big", "minecraft:classic", "minecraft:cute", "minecraft:grumpy", "minecraft:puglin", "minecraft:sad"},
+	}
+	for _, registryID := range []string{
+		"minecraft:cat_sound_variant",
+		"minecraft:chicken_sound_variant",
+		"minecraft:pig_sound_variant",
+		"minecraft:wolf_sound_variant",
+	} {
+		assertRegistryEntries(t, 775, registryID, expectedEntries[registryID])
+		for _, entry := range entriesForRegistry(t, 775, registryID) {
+			if !bytes.Contains(entry.Value, []byte("adult_sounds")) {
+				t.Fatalf("protocol 775 %s/%s missing adult_sounds", registryID, entry.Key)
+			}
+			if !bytes.Contains(entry.Value, []byte("baby_sounds")) {
+				t.Fatalf("protocol 775 %s/%s missing baby_sounds", registryID, entry.Key)
+			}
+		}
+	}
+	assertRegistryEntries(t, 775, "minecraft:cow_sound_variant", []string{"minecraft:classic", "minecraft:moody"})
+	for _, entry := range entriesForRegistry(t, 775, "minecraft:cow_sound_variant") {
+		if !bytes.Contains(entry.Value, []byte("ambient_sound")) {
+			t.Fatalf("protocol 775 minecraft:cow_sound_variant/%s missing ambient_sound", entry.Key)
+		}
+	}
+}
+
+func TestProtocol775FarmVariantsIncludeBabyAssets(t *testing.T) {
+	expectedEntries := map[string][]string{
+		"minecraft:cat_variant":     {"minecraft:all_black", "minecraft:black", "minecraft:british_shorthair", "minecraft:calico", "minecraft:jellie", "minecraft:persian", "minecraft:ragdoll", "minecraft:red", "minecraft:siamese", "minecraft:tabby", "minecraft:white"},
+		"minecraft:chicken_variant": {"minecraft:cold", "minecraft:temperate", "minecraft:warm"},
+		"minecraft:cow_variant":     {"minecraft:cold", "minecraft:temperate", "minecraft:warm"},
+		"minecraft:pig_variant":     {"minecraft:cold", "minecraft:temperate", "minecraft:warm"},
+	}
+	for _, registryID := range []string{
+		"minecraft:cat_variant",
+		"minecraft:chicken_variant",
+		"minecraft:cow_variant",
+		"minecraft:pig_variant",
+	} {
+		assertRegistryEntries(t, 775, registryID, expectedEntries[registryID])
+		for _, entry := range entriesForRegistry(t, 775, registryID) {
+			if !bytes.Contains(entry.Value, []byte("baby_asset_id")) {
+				t.Fatalf("protocol 775 %s/%s missing baby_asset_id", registryID, entry.Key)
+			}
+		}
+	}
+}
+
+func TestProtocol775DamageTypeTagsIncludeClientRequiredTags(t *testing.T) {
+	isFire := tagValuesForRegistry(t, 775, "minecraft:damage_type", "minecraft:is_fire")
+	if len(isFire) == 0 {
+		t.Fatalf("protocol 775 minecraft:damage_type/minecraft:is_fire tag is empty")
+	}
+	bypassesShield := tagValuesForRegistry(t, 775, "minecraft:damage_type", "minecraft:bypasses_shield")
+	if len(bypassesShield) <= len(isFire) {
+		t.Fatalf("protocol 775 minecraft:damage_type/minecraft:bypasses_shield tag did not expand referenced tags")
+	}
+	coldFarmBiomes := tagValuesForRegistry(t, 775, "minecraft:worldgen/biome", "minecraft:spawns_cold_variant_farm_animals")
+	if len(coldFarmBiomes) == 0 {
+		t.Fatalf("protocol 775 minecraft:worldgen/biome/minecraft:spawns_cold_variant_farm_animals tag is empty")
+	}
+	flowerBannerPattern := tagValuesForRegistry(t, 775, "minecraft:banner_pattern", "minecraft:pattern_item/flower")
+	if len(flowerBannerPattern) == 0 {
+		t.Fatalf("protocol 775 minecraft:banner_pattern/minecraft:pattern_item/flower tag is empty")
+	}
+	goatHorns := tagValuesForRegistry(t, 775, "minecraft:instrument", "minecraft:goat_horns")
+	if len(goatHorns) == 0 {
+		t.Fatalf("protocol 775 minecraft:instrument/minecraft:goat_horns tag is empty")
 	}
 }
 
@@ -53,6 +194,57 @@ func TestProtocol774IncludesVanillaRequiredVariantRegistries(t *testing.T) {
 			t.Fatalf("protocol 774 missing non-empty registry %s", registryID)
 		}
 	}
+}
+
+func entriesForRegistry(t *testing.T, protocol int32, registryID string) []Entry {
+	t.Helper()
+	registries, ok := Registries(protocol)
+	if !ok {
+		t.Fatalf("protocol %d has no generated registries", protocol)
+	}
+	for _, registry := range registries {
+		if registry.ID == registryID {
+			if len(registry.Entries) == 0 {
+				t.Fatalf("protocol %d registry %s has no entries", protocol, registryID)
+			}
+			return registry.Entries
+		}
+	}
+	t.Fatalf("protocol %d missing registry %s", protocol, registryID)
+	return nil
+}
+
+func assertRegistryEntries(t *testing.T, protocol int32, registryID string, expected []string) {
+	t.Helper()
+	present := map[string]bool{}
+	for _, entry := range entriesForRegistry(t, protocol, registryID) {
+		present[entry.Key] = true
+	}
+	for _, key := range expected {
+		if !present[key] {
+			t.Fatalf("protocol %d missing registry entry %s/%s", protocol, registryID, key)
+		}
+	}
+}
+
+func tagValuesForRegistry(t *testing.T, protocol int32, registryID string, tagKey string) []int32 {
+	t.Helper()
+	tags, ok := Tags(protocol)
+	if !ok {
+		t.Fatalf("protocol %d has no generated tags", protocol)
+	}
+	for _, registry := range tags {
+		if registry.ID != registryID {
+			continue
+		}
+		for _, tag := range registry.Tags {
+			if tag.Key == tagKey {
+				return tag.Values
+			}
+		}
+	}
+	t.Fatalf("protocol %d missing tag %s/%s", protocol, registryID, tagKey)
+	return nil
 }
 
 func TestProtocol774IncludesRequiredDamageTypes(t *testing.T) {

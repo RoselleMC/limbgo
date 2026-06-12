@@ -202,6 +202,51 @@ router := limbo.Router{
 client-facing login disconnect reason. Returning any other error aborts the
 connection without treating it as a normal protocol denial.
 
+## Registry Data Bundles
+
+Modern Minecraft clients validate dynamic registries during the configuration
+phase. limbgo keeps those registries as versioned data assets instead of
+hard-coding them in protocol code. The repository stores one full JSON file per
+protocol under `protocol/registrydata/protocols/<protocol>.json`, and embeds
+`protocol/registrydata/registrydata.zip` in the binary.
+
+For API users that want future protocol registry fixes without restarting the
+server instance, use a hot-swappable store as the router's registry source:
+
+```go
+registryStore, err := registrydata.NewDefaultStore()
+if err != nil {
+	return err
+}
+
+router := limbo.Router{
+	RegistryDataSource: registryStore,
+}
+
+srv, err := limbgo.NewServer(limbgo.Config{
+	Addr:           ":25565",
+	ProtocolRouter: router,
+	JoinResolver:   joins,
+})
+```
+
+When a new registry bundle is available, update the store. Existing player
+connections keep the registry snapshot they joined with; later connections use
+the new bundle.
+
+```go
+if err := registryStore.UpdateZipFile("/srv/limbgo/registrydata-776.zip"); err != nil {
+	return err
+}
+```
+
+The zip contains protocol JSON files named by protocol number, for example
+`775.json`. Each file declares `format_version`, `protocol`, complete
+`registries`, `tags`, and optional legacy `dimension_codec` / `dimension`
+payloads. Updating registry data can fix configuration-phase registry changes;
+packet IDs, packet field layouts, chunk data shape, and block-state ID tables
+remain protocol adapter concerns.
+
 ## Status And MOTD
 
 For static server-list data, set fields directly on `limbo.Router`:
