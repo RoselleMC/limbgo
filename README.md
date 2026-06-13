@@ -10,8 +10,8 @@ The project is designed for two runtime shapes:
 - an embeddable Go API for projects that want to decide each player's world and
   spawn position dynamically;
 - a standalone binary with a small JSON config containing the listen address,
-  status text, spawn position, optional schematic file, and optional generated
-  protocol data overrides.
+  status text, spawn position, optional schematic file, optional PROXY protocol
+  trust settings, and optional generated protocol data overrides.
 
 ## Compatibility Strategy
 
@@ -127,6 +127,12 @@ The standalone command expects a small JSON config:
     "yggdrasil_base_url": "",
     "online_server_id": ""
   },
+  "proxy_protocol": {
+    "enabled": false,
+    "required": false,
+    "trusted_proxies": ["172.20.0.0/16", "127.0.0.1"],
+    "read_header_timeout_millis": 5000
+  },
   "protocol": {
     "modern_protocols": "protocol/limbo/modern_protocols.json",
     "registry_data": "protocol/registrydata/registrydata.zip"
@@ -162,6 +168,13 @@ The `protocol` paths are optional. When omitted, the binary uses the embedded
 generated defaults. `registry_data` can point at the generated zip bundle or a
 legacy aggregate JSON file. Supplying these paths is useful when testing a new
 protocol line or regenerated registry data without changing Go source.
+
+`proxy_protocol` is optional and disabled by default. Enable it when limbgo is
+behind a trusted TCP router that prepends HAProxy PROXY protocol headers, for
+example Gate lite route `proxyProtocol: true`. Set `required` when every inbound
+connection must come through that router, and keep `trusted_proxies` limited to
+the Gate/container/host network so public clients cannot spoof source
+addresses.
 
 `auth` is optional. The default mode is `offline`, which accepts the claimed
 username and marks `Player.Verified` false. Set `auth.mode` to `online` to run

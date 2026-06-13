@@ -17,12 +17,14 @@ type Config struct {
 	Worlds         WorldProvider
 	SpawnResolver  SpawnResolver
 	Events         PlayerEventHandler
+	ProxyProtocol  ProxyProtocolConfig
 	Logger         *slog.Logger
 }
 
 // Server is an embeddable limbo server.
 type Server struct {
-	cfg Config
+	cfg           Config
+	proxyProtocol proxyProtocolRuntime
 
 	mu       sync.Mutex
 	listener net.Listener
@@ -54,11 +56,16 @@ func NewServer(cfg Config) (*Server, error) {
 	if cfg.Logger == nil {
 		cfg.Logger = slog.Default()
 	}
+	proxyProtocol, err := newProxyProtocolRuntime(cfg.ProxyProtocol)
+	if err != nil {
+		return nil, err
+	}
 
 	return &Server{
-		cfg:   cfg,
-		conns: make(map[net.Conn]struct{}),
-		joins: make(map[string]activeJoin),
+		cfg:           cfg,
+		conns:         make(map[net.Conn]struct{}),
+		joins:         make(map[string]activeJoin),
+		proxyProtocol: proxyProtocol,
 	}, nil
 }
 
@@ -95,6 +102,13 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 				return nil
 			}
 			return err
+		}
+		rawConn := conn
+		conn, err = s.proxyProtocol.wrap(rawConn)
+		if err != nil {
+			s.cfg.Logger.Debug("connection rejected", "remote", rawConn.RemoteAddr(), "error", err)
+			_ = rawConn.Close()
+			continue
 		}
 
 		s.trackConn(conn)

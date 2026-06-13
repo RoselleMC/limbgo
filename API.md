@@ -30,6 +30,44 @@ if err != nil {
 return srv.ListenAndServe(ctx)
 ```
 
+When limbgo is behind a trusted TCP router that sends HAProxy PROXY protocol
+headers, such as Gate lite routes with `proxyProtocol: true`, enable PROXY
+protocol handling on the server:
+
+```go
+srv, err := limbgo.NewServer(limbgo.Config{
+	Addr:           ":25565",
+	ProtocolRouter: limbo.Router{},
+	Worlds:         worlds,
+	SpawnResolver:  limbgo.StaticSpawn(spawn),
+	ProxyProtocol: limbgo.ProxyProtocolConfig{
+		Enabled:        true,
+		Required:       true,
+		TrustedProxies: []string{"172.20.0.0/16", "127.0.0.1"},
+	},
+})
+```
+
+With this enabled, `RemoteAddr` in `StatusRequest`, `ProtocolRequest`,
+`LoginRequest`, and `Player` is the client address from the trusted PROXY
+header. Keep `TrustedProxies` scoped to the Gate/container/host network; do not
+trust public client addresses.
+
+If an embedding application owns its listener or connection lifecycle, it can
+wrap individual connections before passing them to a protocol router:
+
+```go
+wrapped, err := limbgo.WrapProxyProtocolConn(conn, limbgo.ProxyProtocolConfig{
+	Enabled:  true,
+	Required: true,
+})
+if err != nil {
+	_ = conn.Close()
+	return err
+}
+err = router.ServeConn(ctx, wrapped, services)
+```
+
 `Config.Worlds` is used by the default world resolver. For applications that
 need to select a different world instance per player, prefer `JoinResolver`.
 

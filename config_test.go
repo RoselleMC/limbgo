@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestLoadFileConfigProtocolAndStatusFields(t *testing.T) {
@@ -109,6 +110,50 @@ func TestLoadFileConfigAuthFields(t *testing.T) {
 	}
 	if cfg.Auth.OnlineServerID != "limbgo-login" {
 		t.Fatalf("auth.online_server_id = %q", cfg.Auth.OnlineServerID)
+	}
+}
+
+func TestLoadFileConfigProxyProtocolFields(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "limbgo.json")
+	raw := []byte(`{
+  "proxy_protocol": {
+    "enabled": true,
+    "required": true,
+    "trusted_proxies": ["172.20.0.0/16", "127.0.0.1"],
+    "read_header_timeout_millis": 2500
+  },
+  "world": {
+    "schematic": "spawn.schem"
+  }
+}`)
+	if err := os.WriteFile(path, raw, 0o600); err != nil {
+		t.Fatalf("write config: %v", err)
+	}
+
+	cfg, err := LoadFileConfig(path)
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+	proxyProtocol := cfg.ProxyProtocol.Config()
+	if !proxyProtocol.Enabled {
+		t.Fatalf("proxy_protocol.enabled = false")
+	}
+	if !proxyProtocol.Required {
+		t.Fatalf("proxy_protocol.required = false")
+	}
+	if len(proxyProtocol.TrustedProxies) != 2 {
+		t.Fatalf("trusted proxies = %+v", proxyProtocol.TrustedProxies)
+	}
+	if proxyProtocol.ReadHeaderTimeout != 2500*time.Millisecond {
+		t.Fatalf("read header timeout = %s", proxyProtocol.ReadHeaderTimeout)
+	}
+}
+
+func TestFileProxyProtocolRequiredEnablesConfig(t *testing.T) {
+	proxyProtocol := FileProxyProtocolConfig{Required: true}.Config()
+	if !proxyProtocol.Enabled || !proxyProtocol.Required {
+		t.Fatalf("proxy protocol config = %+v, want enabled and required", proxyProtocol)
 	}
 }
 

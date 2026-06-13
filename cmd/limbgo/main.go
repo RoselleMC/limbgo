@@ -74,6 +74,7 @@ func main() {
 		Worlds:         limbgo.StaticWorldProvider{world.ID(): world},
 		SpawnResolver:  limbgo.StaticSpawn(fileCfg.SpawnTarget()),
 		Events:         limbgo.PlayerEventHandlerFuncs{},
+		ProxyProtocol:  fileCfg.ProxyProtocol.Config(),
 		Logger:         slog.Default(),
 	})
 	if err != nil {

@@ -10,10 +10,11 @@ import (
 
 // FileConfig is the simple deployable configuration format.
 type FileConfig struct {
-	Listen   string           `json:"listen"`
-	Status   FileStatusConfig `json:"status"`
-	Auth     FileAuthConfig   `json:"auth"`
-	Protocol struct {
+	Listen        string                  `json:"listen"`
+	Status        FileStatusConfig        `json:"status"`
+	Auth          FileAuthConfig          `json:"auth"`
+	ProxyProtocol FileProxyProtocolConfig `json:"proxy_protocol"`
+	Protocol      struct {
 		ModernProtocols string `json:"modern_protocols"`
 		RegistryData    string `json:"registry_data"`
 	} `json:"protocol"`
@@ -35,6 +36,15 @@ type FileAuthConfig struct {
 	Mode             LoginMode `json:"mode"`
 	YggdrasilBaseURL string    `json:"yggdrasil_base_url"`
 	OnlineServerID   string    `json:"online_server_id"`
+}
+
+// FileProxyProtocolConfig is the deployable JSON shape for accepting HAProxy
+// PROXY protocol headers from trusted upstream routers.
+type FileProxyProtocolConfig struct {
+	Enabled                 bool     `json:"enabled"`
+	Required                bool     `json:"required"`
+	TrustedProxies          []string `json:"trusted_proxies"`
+	ReadHeaderTimeoutMillis int64    `json:"read_header_timeout_millis"`
 }
 
 // FileStatusConfig is the deployable JSON shape for server-list status.
@@ -157,6 +167,16 @@ func (cfg FileStatusRateLimitConfig) RateLimiter() *RateLimiter {
 		Requests: cfg.Requests,
 		Window:   time.Duration(cfg.WindowMillis) * time.Millisecond,
 	})
+}
+
+// Config returns the API PROXY protocol configuration described by the file.
+func (cfg FileProxyProtocolConfig) Config() ProxyProtocolConfig {
+	return ProxyProtocolConfig{
+		Enabled:           cfg.Enabled || cfg.Required,
+		Required:          cfg.Required,
+		TrustedProxies:    append([]string(nil), cfg.TrustedProxies...),
+		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeoutMillis) * time.Millisecond,
+	}
 }
 
 // SpawnTarget returns the static spawn described by the file.

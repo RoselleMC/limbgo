@@ -1590,6 +1590,147 @@ func TestProtocol47StatusStillWorks(t *testing.T) {
 	}
 }
 
+func TestStatusAcceptsGateLiteProxyProtocol(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	wrappedConn, err := limbgo.WrapProxyProtocolConn(serverConn, limbgo.ProxyProtocolConfig{
+		Enabled:  true,
+		Required: true,
+	})
+	if err != nil {
+		t.Fatalf("wrap proxy protocol conn: %v", err)
+	}
+
+	realClientAddr := &net.TCPAddr{IP: net.ParseIP("203.0.113.10"), Port: 65073}
+	gotRemote := make(chan string, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			StatusProvider: limbgo.StatusProviderFunc(func(_ context.Context, req limbgo.StatusRequest) (limbgo.Status, error) {
+				gotRemote <- req.RemoteAddr.String()
+				return limbgo.Status{Description: &component.Text{Content: "gate lite ok"}}, nil
+			}),
+		}.ServeConn(context.Background(), wrappedConn, nil)
+	}()
+
+	if err := writeProxyProtocolV2Header(clientConn, realClientAddr, &net.TCPAddr{IP: net.ParseIP("172.20.0.37"), Port: 25665}); err != nil {
+		t.Fatalf("write proxy protocol header: %v", err)
+	}
+	if err := writeHandshake(clientConn, protocol774, "roselle.vip", 25565, stateStatus); err != nil {
+		t.Fatalf("write handshake: %v", err)
+	}
+	if err := wire.WritePacket(clientConn, wire.Packet{ID: 0}); err != nil {
+		t.Fatalf("write status request: %v", err)
+	}
+
+	reader := bufio.NewReader(clientConn)
+	response, err := wire.ReadPacket(reader, 0)
+	if err != nil {
+		t.Fatalf("read status response: %v", err)
+	}
+	if response.ID != 0 {
+		t.Fatalf("status response id = %d, want 0", response.ID)
+	}
+	var ping bytes.Buffer
+	if err := wire.WriteLong(&ping, 9); err != nil {
+		t.Fatalf("write ping payload: %v", err)
+	}
+	if err := wire.WritePacket(clientConn, wire.Packet{ID: 1, Data: ping.Bytes()}); err != nil {
+		t.Fatalf("write ping: %v", err)
+	}
+	pong, err := wire.ReadPacket(reader, 0)
+	if err != nil {
+		t.Fatalf("read pong: %v", err)
+	}
+	if pong.ID != 1 {
+		t.Fatalf("pong id = %d, want 1", pong.ID)
+	}
+	select {
+	case got := <-gotRemote:
+		if got != realClientAddr.String() {
+			t.Fatalf("remote addr = %q, want %q", got, realClientAddr.String())
+		}
+	default:
+		t.Fatalf("status provider did not receive request")
+	}
+
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestLoginAcceptsGateLiteProxyProtocol(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	wrappedConn, err := limbgo.WrapProxyProtocolConn(serverConn, limbgo.ProxyProtocolConfig{
+		Enabled:  true,
+		Required: true,
+	})
+	if err != nil {
+		t.Fatalf("wrap proxy protocol conn: %v", err)
+	}
+
+	realClientAddr := &net.TCPAddr{IP: net.ParseIP("203.0.113.11"), Port: 65074}
+	gotRemote := make(chan string, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginPolicy: limbgo.LoginPolicyFunc(func(_ context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {
+				gotRemote <- req.RemoteAddr.String()
+				return limbgo.LoginModeOffline, nil
+			}),
+		}.ServeConn(context.Background(), wrappedConn, services)
+	}()
+
+	if err := writeProxyProtocolV2Header(clientConn, realClientAddr, &net.TCPAddr{IP: net.ParseIP("172.20.0.37"), Port: 25665}); err != nil {
+		t.Fatalf("write proxy protocol header: %v", err)
+	}
+	loginProtocol(t, clientConn, protocol774, false)
+	reader := bufio.NewReader(clientConn)
+	assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
+		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "position")
+	assertModernChunkViewPackets(t, reader, protocol774)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	select {
+	case got := <-gotRemote:
+		if got != realClientAddr.String() {
+			t.Fatalf("remote addr = %q, want %q", got, realClientAddr.String())
+		}
+	default:
+		t.Fatalf("login policy did not receive request")
+	}
+
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
 func TestProtocol774SessionControlAPI(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 
@@ -3012,6 +3153,30 @@ func writeHandshake(conn net.Conn, protocol int32, address string, port uint16, 
 		return err
 	}
 	return wire.WritePacket(conn, wire.Packet{ID: 0, Data: data.Bytes()})
+}
+
+func writeProxyProtocolV2Header(conn net.Conn, source *net.TCPAddr, dest *net.TCPAddr) error {
+	var data bytes.Buffer
+	data.Write([]byte{'\r', '\n', '\r', '\n', 0, '\r', '\n', 'Q', 'U', 'I', 'T', '\n'})
+	data.WriteByte(0x21)
+	if source.IP.To4() != nil && dest.IP.To4() != nil {
+		data.WriteByte(0x11)
+		_ = binary.Write(&data, binary.BigEndian, uint16(12))
+		data.Write(source.IP.To4())
+		data.Write(dest.IP.To4())
+		_ = binary.Write(&data, binary.BigEndian, uint16(source.Port))
+		_ = binary.Write(&data, binary.BigEndian, uint16(dest.Port))
+		_, err := conn.Write(data.Bytes())
+		return err
+	}
+	data.WriteByte(0x21)
+	_ = binary.Write(&data, binary.BigEndian, uint16(36))
+	data.Write(source.IP.To16())
+	data.Write(dest.IP.To16())
+	_ = binary.Write(&data, binary.BigEndian, uint16(source.Port))
+	_ = binary.Write(&data, binary.BigEndian, uint16(dest.Port))
+	_, err := conn.Write(data.Bytes())
+	return err
 }
 
 func testWorld() *limbgo.MemoryWorld {
