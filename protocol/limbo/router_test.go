@@ -1199,6 +1199,7 @@ func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 
 	got := make(chan string, 1)
+	richMessage := mustParseMiniMessage(t, "<gradient:#123456:#abcdef>abc</gradient>")
 	services := testServices{
 		spawn: limbgo.SpawnTarget{
 			World:    "spawn",
@@ -1209,12 +1210,7 @@ func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
 		events: limbgo.PlayerEventHandlerFuncs{
 			Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
 				got <- event.Message
-				return session.SendMessage(ctx, &component.Text{
-					Content: "accepted",
-					Extra: []component.Component{
-						&component.Text{Content: " rich"},
-					},
-				})
+				return session.SendMessage(ctx, richMessage)
 			},
 		},
 	}
@@ -1248,7 +1244,8 @@ func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
 	if message := <-got; message != "hello" {
 		t.Fatalf("chat event = %q, want hello", message)
 	}
-	assertPacketID(t, reader, protocol774, packetid.StatePlay, "system_chat")
+	systemPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "system_chat")
+	assertPacketContains(t, systemPacket.Data, "#123456", "#5e80a2", "#abcdef")
 
 	_ = clientConn.Close()
 	if err := <-errCh; err != nil {
@@ -1258,6 +1255,9 @@ func TestProtocol774ChatEventCanSendRichSystemMessage(t *testing.T) {
 
 func TestProtocol774ActionBarAndTitleAPI(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
+	actionText := mustParseMiniMessage(t, "<gradient:#123456:#abcdef>abc</gradient>")
+	titleText := mustParseMiniMessage(t, "<gradient:#112233:#445566>title</gradient>")
+	subtitleText := mustParseMiniMessage(t, "<gradient:#654321:#fedcba>sub</gradient>")
 
 	services := testServices{
 		spawn: limbgo.SpawnTarget{
@@ -1268,15 +1268,12 @@ func TestProtocol774ActionBarAndTitleAPI(t *testing.T) {
 		world: testWorld(),
 		events: limbgo.PlayerEventHandlerFuncs{
 			Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
-				if err := session.SendActionBar(ctx, &component.Text{
-					Content: "action",
-					Extra:   []component.Component{&component.Text{Content: " rich"}},
-				}); err != nil {
+				if err := session.SendActionBar(ctx, actionText); err != nil {
 					return err
 				}
 				if err := session.ShowTitle(ctx, limbgo.Title{
-					Title:    &component.Text{Content: "Title"},
-					Subtitle: &component.Text{Content: "Subtitle"},
+					Title:    titleText,
+					Subtitle: subtitleText,
 					Times:    limbgo.TitleTimesTicks(5, 40, 10),
 				}); err != nil {
 					return err
@@ -1302,12 +1299,15 @@ func TestProtocol774ActionBarAndTitleAPI(t *testing.T) {
 	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "chat_message", message.Bytes())
 
 	actionBarPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "action_bar")
+	assertPacketContains(t, actionBarPacket.Data, "#123456", "#5e80a2", "#abcdef")
 	assertAnonymousNBTOnly(t, actionBarPacket.Data)
 	timePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "set_title_time")
 	assertTitleTimesPacket(t, timePacket.Data, 5, 40, 10)
 	titlePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "set_title_text")
+	assertPacketContains(t, titlePacket.Data, "#112233", "#1d2e3f", "#2a3b4c", "#374859", "#445566")
 	assertAnonymousNBTOnly(t, titlePacket.Data)
 	subtitlePacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "set_title_subtitle")
+	assertPacketContains(t, subtitlePacket.Data, "#654321", "#b18f6d", "#fedcba")
 	assertAnonymousNBTOnly(t, subtitlePacket.Data)
 	clearPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "clear_titles")
 	assertClearTitlesPacket(t, clearPacket.Data, true)
@@ -1361,6 +1361,8 @@ func TestProtocol774DialogAPIAndClickEvent(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 
 	gotClick := make(chan limbgo.DialogClickEvent, 1)
+	dialogTitle := mustParseMiniMessage(t, "<gradient:#123456:#abcdef>abc</gradient>")
+	dialogBody := mustParseMiniMessage(t, "<gradient:#654321:#fedcba>xyz</gradient>")
 	services := testServices{
 		spawn: limbgo.SpawnTarget{
 			World:    "spawn",
@@ -1371,14 +1373,9 @@ func TestProtocol774DialogAPIAndClickEvent(t *testing.T) {
 		events: limbgo.PlayerEventHandlerFuncs{
 			Chat: func(ctx context.Context, session limbgo.PlayerSession, event *limbgo.ChatEvent) error {
 				if err := session.ShowDialog(ctx, dialog.Notice(dialog.Common{
-					Title: &component.Text{
-						Content: "Welcome",
-						Extra: []component.Component{
-							&component.Text{Content: " rich"},
-						},
-					},
+					Title: dialogTitle,
 					Body: []dialog.Raw{
-						dialog.PlainMessage(&component.Text{Content: "Choose an action"}, 220),
+						dialog.PlainMessage(dialogBody, 220),
 					},
 					Inputs: []dialog.Raw{
 						dialog.TextInput("name", &component.Text{Content: "Name"}, dialog.TextInputOptions{
@@ -1438,6 +1435,7 @@ func TestProtocol774DialogAPIAndClickEvent(t *testing.T) {
 	}
 	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StatePlay, "chat_message", message.Bytes())
 	dialogPacket := assertPacketID(t, reader, protocol774, packetid.StatePlay, "show_dialog")
+	assertPacketContains(t, dialogPacket.Data, "#123456", "#5e80a2", "#abcdef", "#654321", "#b18f6d", "#fedcba")
 	assertInlineDialogNBT(t, dialogPacket.Data)
 	assertPacketID(t, reader, protocol774, packetid.StatePlay, "clear_dialog")
 
@@ -2538,6 +2536,24 @@ func assertInlineDialogNBT(t *testing.T, data []byte) {
 	}
 	if reader.Len() != 0 {
 		t.Fatalf("dialog packet has %d trailing bytes", reader.Len())
+	}
+}
+
+func mustParseMiniMessage(t *testing.T, text string) component.Component {
+	t.Helper()
+	out, err := limbgo.ParseMiniMessage(text)
+	if err != nil {
+		t.Fatalf("parse minimessage %q: %v", text, err)
+	}
+	return out
+}
+
+func assertPacketContains(t *testing.T, data []byte, values ...string) {
+	t.Helper()
+	for _, value := range values {
+		if !bytes.Contains(data, []byte(value)) {
+			t.Fatalf("packet data missing %q in %q", value, string(data))
+		}
 	}
 }
 

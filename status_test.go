@@ -66,3 +66,20 @@ func TestFileStatusConfigMiniMessageComponent(t *testing.T) {
 		t.Fatalf("bold = %v, want true in %s", decoded["bold"], raw)
 	}
 }
+
+func TestMarshalComponentJSONPreservesRGBGradient(t *testing.T) {
+	component, err := ParseMiniMessage("<gradient:#123456:#abcdef>abc</gradient>")
+	if err != nil {
+		t.Fatalf("parse gradient: %v", err)
+	}
+	raw, err := MarshalComponentJSON(774, component)
+	if err != nil {
+		t.Fatalf("marshal component: %v", err)
+	}
+	text := string(raw)
+	for _, want := range []string{`"#123456"`, `"#5e80a2"`, `"#abcdef"`} {
+		if !strings.Contains(text, want) {
+			t.Fatalf("component json missing %s in %s", want, text)
+		}
+	}
+}

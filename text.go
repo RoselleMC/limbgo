@@ -57,6 +57,7 @@ func MarshalComponentJSON(protocol int32, message component.Component) ([]byte, 
 		EmitHoverShowEntityIdAsIntArray:         protocol >= 764,
 		EmitHoverShowEntityKeyAsTypeAndUuidAsId: protocol < 770,
 		EmitDefaultItemHoverQuantity:            protocol >= 766,
+		NoDownsampleColor:                       true,
 		StdJson:                                 true,
 	}
 	if err := encoder.Marshal(&out, message); err != nil {

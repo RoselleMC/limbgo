@@ -64,6 +64,7 @@ func (c componentJSON) MarshalJSON() ([]byte, error) {
 		EmitHoverShowEntityIdAsIntArray:         true,
 		EmitDefaultItemHoverQuantity:            true,
 		EmitHoverShowEntityKeyAsTypeAndUuidAsId: false,
+		NoDownsampleColor:                       true,
 		StdJson:                                 true,
 	}
 	if err := encoder.Marshal(&out, c.value); err != nil {
