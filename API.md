@@ -41,9 +41,10 @@ srv, err := limbgo.NewServer(limbgo.Config{
 	Worlds:         worlds,
 	SpawnResolver:  limbgo.StaticSpawn(spawn),
 	ProxyProtocol: limbgo.ProxyProtocolConfig{
-		Enabled:        true,
-		Required:       true,
-		TrustedProxies: []string{"172.20.0.0/16", "127.0.0.1"},
+		Enabled:                true,
+		Required:               true,
+		TrustedProxies:         []string{"172.20.0.0/16", "127.0.0.1"},
+		RestrictTrustedProxies: true,
 	},
 })
 ```
@@ -51,7 +52,8 @@ srv, err := limbgo.NewServer(limbgo.Config{
 With this enabled, `RemoteAddr` in `StatusRequest`, `ProtocolRequest`,
 `LoginRequest`, and `Player` is the client address from the trusted PROXY
 header. Keep `TrustedProxies` scoped to the Gate/container/host network; do not
-trust public client addresses.
+trust public client addresses. If `RestrictTrustedProxies` is false and
+`TrustedProxies` is empty, limbgo accepts PROXY headers from any upstream.
 
 If an embedding application owns its listener or connection lifecycle, it can
 wrap individual connections before passing them to a protocol router:

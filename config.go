@@ -44,6 +44,7 @@ type FileProxyProtocolConfig struct {
 	Enabled                 bool     `json:"enabled"`
 	Required                bool     `json:"required"`
 	TrustedProxies          []string `json:"trusted_proxies"`
+	RestrictTrustedProxies  bool     `json:"restrict_trusted_proxies"`
 	ReadHeaderTimeoutMillis int64    `json:"read_header_timeout_millis"`
 }
 
@@ -172,10 +173,11 @@ func (cfg FileStatusRateLimitConfig) RateLimiter() *RateLimiter {
 // Config returns the API PROXY protocol configuration described by the file.
 func (cfg FileProxyProtocolConfig) Config() ProxyProtocolConfig {
 	return ProxyProtocolConfig{
-		Enabled:           cfg.Enabled || cfg.Required,
-		Required:          cfg.Required,
-		TrustedProxies:    append([]string(nil), cfg.TrustedProxies...),
-		ReadHeaderTimeout: time.Duration(cfg.ReadHeaderTimeoutMillis) * time.Millisecond,
+		Enabled:                cfg.Enabled || cfg.Required,
+		Required:               cfg.Required,
+		TrustedProxies:         append([]string(nil), cfg.TrustedProxies...),
+		RestrictTrustedProxies: cfg.RestrictTrustedProxies,
+		ReadHeaderTimeout:      time.Duration(cfg.ReadHeaderTimeoutMillis) * time.Millisecond,
 	}
 }
 

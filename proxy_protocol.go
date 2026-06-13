@@ -27,11 +27,14 @@ var (
 // Enable this when limbgo is behind a trusted TCP proxy such as Gate lite with
 // route.proxyProtocol enabled. TrustedProxies should normally contain the proxy
 // container, host, or subnet address so public clients cannot spoof RemoteAddr.
+// When RestrictTrustedProxies is true, an empty TrustedProxies list rejects all
+// upstreams instead of falling back to trusting every upstream.
 type ProxyProtocolConfig struct {
-	Enabled           bool
-	Required          bool
-	TrustedProxies    []string
-	ReadHeaderTimeout time.Duration
+	Enabled                bool
+	Required               bool
+	TrustedProxies         []string
+	RestrictTrustedProxies bool
+	ReadHeaderTimeout      time.Duration
 }
 
 type proxyProtocolRuntime struct {
@@ -74,7 +77,7 @@ func newProxyProtocolRuntime(cfg ProxyProtocolConfig) (proxyProtocolRuntime, err
 		}
 		runtime.trusted = append(runtime.trusted, network)
 	}
-	runtime.hasTrustedList = len(runtime.trusted) > 0
+	runtime.hasTrustedList = cfg.RestrictTrustedProxies || len(runtime.trusted) > 0
 	return runtime, nil
 }
 
