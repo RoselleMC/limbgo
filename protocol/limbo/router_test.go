@@ -20,6 +20,7 @@ import (
 	"github.com/RoselleMC/limbgo/internal/protocol/wire"
 	"github.com/RoselleMC/limbgo/protocol/packetid"
 	"github.com/RoselleMC/limbgo/protocol/registrydata"
+	"github.com/RoselleMC/limbgo/protocol/versions"
 	"go.minekube.com/common/minecraft/component"
 )
 
@@ -104,6 +105,162 @@ func TestProtocol340LoginAndChunk(t *testing.T) {
 
 	if err := <-errCh; err != nil {
 		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestPlayProtocolCoverageFrom188Through2612(t *testing.T) {
+	modernProtocols, err := DefaultModernProtocols()
+	if err != nil {
+		t.Fatalf("load modern protocols: %v", err)
+	}
+	var missing []int32
+	for _, protocol := range versions.Protocols() {
+		if protocol < 47 || protocol > 775 {
+			continue
+		}
+		if !hasPlayProtocolAdapter(protocol, modernProtocols) {
+			missing = append(missing, protocol)
+		}
+	}
+	if len(missing) > 0 {
+		t.Fatalf("missing play protocol adapters for %v", missing)
+	}
+}
+
+func hasPlayProtocolAdapter(protocol int32, modernProtocols *ModernProtocols) bool {
+	if protocol == protocol47 || protocol == protocol340 {
+		return true
+	}
+	if _, ok := legacyProtocolConfigFor(protocol); ok {
+		return true
+	}
+	if _, ok := flatProtocolConfigFor(protocol); ok {
+		return true
+	}
+	if _, ok := codecProtocolConfigFor(protocol); ok {
+		return true
+	}
+	_, ok := modernProtocols.configFor(protocol)
+	return ok
+}
+
+func TestLegacyProtocolLoginAndChunkCoverage(t *testing.T) {
+	for _, protocol := range []int32{107, 109, 110, 210, 315, 316, 335, 338} {
+		t.Run(fmt.Sprintf("protocol_%d", protocol), func(t *testing.T) {
+			serverConn, clientConn := net.Pipe()
+			defer clientConn.Close()
+
+			services := testServices{
+				spawn: limbgo.SpawnTarget{
+					World:    "spawn",
+					Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+					GameMode: limbgo.GameModeAdventure,
+				},
+				world: testWorld(),
+			}
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+			}()
+
+			loginProtocol(t, clientConn, protocol, false)
+			reader := bufio.NewReader(clientConn)
+			assertPacketID(t, reader, protocol, packetid.StateLogin, "success")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "login")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "spawn_position")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "position")
+			chunkPacket := assertPacketID(t, reader, protocol, packetid.StatePlay, "map_chunk")
+			assertFirstChunkBlock340(t, chunkPacket.Data, 1<<4)
+
+			if err := <-errCh; err != nil {
+				t.Fatalf("router error: %v", err)
+			}
+		})
+	}
+}
+
+func TestFlatProtocolLoginAndChunkCoverage(t *testing.T) {
+	for _, protocol := range []int32{393, 401, 404, 477, 480, 490, 498, 573, 575, 578} {
+		t.Run(fmt.Sprintf("protocol_%d", protocol), func(t *testing.T) {
+			cfg, ok := flatProtocolConfigFor(protocol)
+			if !ok {
+				t.Fatalf("missing flat protocol config for %d", protocol)
+			}
+			serverConn, clientConn := net.Pipe()
+			defer clientConn.Close()
+
+			services := testServices{
+				spawn: limbgo.SpawnTarget{
+					World:    "spawn",
+					Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+					GameMode: limbgo.GameModeAdventure,
+				},
+				world: testWorld(),
+			}
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+			}()
+
+			loginProtocol(t, clientConn, protocol, false)
+			reader := bufio.NewReader(clientConn)
+			assertPacketID(t, reader, protocol, packetid.StateLogin, "success")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "login")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "spawn_position")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "position")
+			chunkPacket := assertPacketID(t, reader, protocol, packetid.StatePlay, "map_chunk")
+			assertFirstChunkBlockFlat(t, chunkPacket.Data, cfg, 1)
+			if cfg.chunkUpdateLight {
+				assertPacketID(t, reader, protocol, packetid.StatePlay, "update_light")
+			}
+
+			if err := <-errCh; err != nil {
+				t.Fatalf("router error: %v", err)
+			}
+		})
+	}
+}
+
+func TestCodecProtocolLoginAndChunkCoverage(t *testing.T) {
+	for _, protocol := range []int32{735, 736, 751, 753, 754, 755, 756} {
+		t.Run(fmt.Sprintf("protocol_%d", protocol), func(t *testing.T) {
+			cfg, ok := codecProtocolConfigFor(protocol)
+			if !ok {
+				t.Fatalf("missing codec protocol config for %d", protocol)
+			}
+			serverConn, clientConn := net.Pipe()
+			defer clientConn.Close()
+
+			services := testServices{
+				spawn: limbgo.SpawnTarget{
+					World:    "spawn",
+					Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+					GameMode: limbgo.GameModeAdventure,
+				},
+				world: testWorld(),
+			}
+
+			errCh := make(chan error, 1)
+			go func() {
+				errCh <- Router{Description: "limbgo test"}.ServeConn(context.Background(), serverConn, services)
+			}()
+
+			loginProtocol(t, clientConn, protocol, false)
+			reader := bufio.NewReader(clientConn)
+			assertPacketID(t, reader, protocol, packetid.StateLogin, "success")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "login")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "spawn_position")
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "position")
+			chunkPacket := assertPacketID(t, reader, protocol, packetid.StatePlay, "map_chunk")
+			assertFirstChunkBlockCodec(t, chunkPacket.Data, cfg, 1)
+			assertPacketID(t, reader, protocol, packetid.StatePlay, "update_light")
+
+			if err := <-errCh; err != nil {
+				t.Fatalf("router error: %v", err)
+			}
+		})
 	}
 }
 
@@ -1381,7 +1538,7 @@ func testModernLoginConfigurationAndChunkWithPacketProtocol(t *testing.T, protoc
 	assertModernChunkViewPackets(t, reader, packetProtocol)
 	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "chunk_batch_start")
 	chunkPacket := assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "map_chunk")
-	assertFirstChunkBlockModern(t, chunkPacket.Data, protocol >= protocol770, false, protocol == protocol775, protocol == protocol775, 1)
+	assertFirstChunkBlockModern(t, chunkPacket.Data, protocol >= protocol770, false, false, protocol == protocol775, 1)
 	assertPacketID(t, reader, packetProtocol, packetid.StatePlay, "chunk_batch_finished")
 
 	if err := <-errCh; err != nil {
@@ -2262,6 +2419,212 @@ func assertFirstChunkBlock340(t *testing.T, data []byte, want uint32) {
 	}
 }
 
+func assertFirstChunkBlockFlat(t *testing.T, data []byte, cfg flatProtocolConfig, want uint32) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	if _, err := readInt32(reader); err != nil {
+		t.Fatalf("read chunk x: %v", err)
+	}
+	if _, err := readInt32(reader); err != nil {
+		t.Fatalf("read chunk z: %v", err)
+	}
+	if _, err := reader.ReadByte(); err != nil {
+		t.Fatalf("read ground-up flag: %v", err)
+	}
+	mask, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read section mask: %v", err)
+	}
+	if mask != 1 {
+		t.Fatalf("section mask = %#x, want 0x1", mask)
+	}
+	if cfg.chunkHeightmaps {
+		if err := skipNamedNBT(reader); err != nil {
+			t.Fatalf("skip heightmaps: %v", err)
+		}
+	}
+	if cfg.chunkBiomesOuter1024 {
+		for i := 0; i < 1024; i++ {
+			if _, err := readInt32(reader); err != nil {
+				t.Fatalf("read outer biome %d: %v", i, err)
+			}
+		}
+	}
+	size, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read chunk data size: %v", err)
+	}
+	chunkData := make([]byte, size)
+	if _, err := reader.Read(chunkData); err != nil {
+		t.Fatalf("read chunk data: %v", err)
+	}
+	section := bytes.NewReader(chunkData)
+	if cfg.chunkSectionSolid {
+		if _, err := readUint16(section); err != nil {
+			t.Fatalf("read solid block count: %v", err)
+		}
+	}
+	bitsPerBlock, err := section.ReadByte()
+	if err != nil {
+		t.Fatalf("read bits per block: %v", err)
+	}
+	if bitsPerBlock != 4 {
+		t.Fatalf("bits per block = %d, want 4", bitsPerBlock)
+	}
+	paletteLen, err := wire.ReadVarInt(section)
+	if err != nil {
+		t.Fatalf("read palette len: %v", err)
+	}
+	if paletteLen < 2 {
+		t.Fatalf("palette len = %d, want at least 2", paletteLen)
+	}
+	palette := make([]uint32, paletteLen)
+	for i := range palette {
+		value, err := wire.ReadVarInt(section)
+		if err != nil {
+			t.Fatalf("read palette entry %d: %v", i, err)
+		}
+		palette[i] = uint32(value)
+	}
+	dataLen, err := wire.ReadVarInt(section)
+	if err != nil {
+		t.Fatalf("read long array len: %v", err)
+	}
+	if dataLen <= 0 {
+		t.Fatalf("long array len = %d", dataLen)
+	}
+	firstLong, err := wire.ReadLong(section)
+	if err != nil {
+		t.Fatalf("read first packed long: %v", err)
+	}
+	firstPaletteIndex := uint64(firstLong) & 0xf
+	if int(firstPaletteIndex) >= len(palette) {
+		t.Fatalf("first palette index %d outside palette %+v", firstPaletteIndex, palette)
+	}
+	if got := palette[firstPaletteIndex]; got != want {
+		t.Fatalf("first block state = %#x, want %#x (palette %+v)", got, want, palette)
+	}
+}
+
+func assertFirstChunkBlockCodec(t *testing.T, data []byte, cfg codecProtocolConfig, want uint32) {
+	t.Helper()
+	reader := bytes.NewReader(data)
+	if _, err := readInt32(reader); err != nil {
+		t.Fatalf("read chunk x: %v", err)
+	}
+	if _, err := readInt32(reader); err != nil {
+		t.Fatalf("read chunk z: %v", err)
+	}
+	if cfg.chunkMaskLongArray {
+		maskLen, err := wire.ReadVarInt(reader)
+		if err != nil {
+			t.Fatalf("read mask len: %v", err)
+		}
+		if maskLen != 1 {
+			t.Fatalf("mask len = %d, want 1", maskLen)
+		}
+		mask, err := wire.ReadLong(reader)
+		if err != nil {
+			t.Fatalf("read mask long: %v", err)
+		}
+		if mask != 1 {
+			t.Fatalf("mask = %#x, want 0x1", mask)
+		}
+	} else {
+		if _, err := reader.ReadByte(); err != nil {
+			t.Fatalf("read ground-up flag: %v", err)
+		}
+		if cfg.chunkIgnoreOldData {
+			if _, err := reader.ReadByte(); err != nil {
+				t.Fatalf("read ignore-old-data flag: %v", err)
+			}
+		}
+		mask, err := wire.ReadVarInt(reader)
+		if err != nil {
+			t.Fatalf("read section mask: %v", err)
+		}
+		if mask != 1 {
+			t.Fatalf("section mask = %#x, want 0x1", mask)
+		}
+	}
+	if err := skipNamedNBT(reader); err != nil {
+		t.Fatalf("skip heightmaps: %v", err)
+	}
+	if cfg.chunkBiomeFixed1024 {
+		for i := 0; i < 1024; i++ {
+			if _, err := readInt32(reader); err != nil {
+				t.Fatalf("read fixed biome %d: %v", i, err)
+			}
+		}
+	}
+	if cfg.chunkBiomeVarInts {
+		count, err := wire.ReadVarInt(reader)
+		if err != nil {
+			t.Fatalf("read biome count: %v", err)
+		}
+		if count != 1024 {
+			t.Fatalf("biome count = %d, want 1024", count)
+		}
+		for i := int32(0); i < count; i++ {
+			if _, err := wire.ReadVarInt(reader); err != nil {
+				t.Fatalf("read varint biome %d: %v", i, err)
+			}
+		}
+	}
+	size, err := wire.ReadVarInt(reader)
+	if err != nil {
+		t.Fatalf("read chunk data size: %v", err)
+	}
+	chunkData := make([]byte, size)
+	if _, err := reader.Read(chunkData); err != nil {
+		t.Fatalf("read chunk data: %v", err)
+	}
+	section := bytes.NewReader(chunkData)
+	if _, err := readUint16(section); err != nil {
+		t.Fatalf("read solid block count: %v", err)
+	}
+	bitsPerBlock, err := section.ReadByte()
+	if err != nil {
+		t.Fatalf("read bits per block: %v", err)
+	}
+	if bitsPerBlock != 4 {
+		t.Fatalf("bits per block = %d, want 4", bitsPerBlock)
+	}
+	paletteLen, err := wire.ReadVarInt(section)
+	if err != nil {
+		t.Fatalf("read palette len: %v", err)
+	}
+	if paletteLen < 2 {
+		t.Fatalf("palette len = %d, want at least 2", paletteLen)
+	}
+	palette := make([]uint32, paletteLen)
+	for i := range palette {
+		value, err := wire.ReadVarInt(section)
+		if err != nil {
+			t.Fatalf("read palette entry %d: %v", i, err)
+		}
+		palette[i] = uint32(value)
+	}
+	dataLen, err := wire.ReadVarInt(section)
+	if err != nil {
+		t.Fatalf("read long array len: %v", err)
+	}
+	if dataLen <= 0 {
+		t.Fatalf("long array len = %d", dataLen)
+	}
+	firstLong, err := wire.ReadLong(section)
+	if err != nil {
+		t.Fatalf("read first packed long: %v", err)
+	}
+	firstPaletteIndex := uint64(firstLong) & 0xf
+	if int(firstPaletteIndex) >= len(palette) {
+		t.Fatalf("first palette index %d outside palette %+v", firstPaletteIndex, palette)
+	}
+	if got := palette[firstPaletteIndex]; got != want {
+		t.Fatalf("first block state = %#x, want %#x (palette %+v)", got, want, palette)
+	}
+}
+
 func assertFirstChunkBlockModern(t *testing.T, data []byte, heightmapArray bool, heightmapNamed bool, sectionFluidCount bool, fixedPalettedStorage bool, want uint32) {
 	t.Helper()
 	assertChunkBlockModern(t, data, heightmapArray, heightmapNamed, sectionFluidCount, fixedPalettedStorage, 0, 0, want)
@@ -2572,6 +2935,15 @@ func loginStartPayload(t *testing.T, protocol int32, username string, claimedUUI
 		t.Fatalf("write username: %v", err)
 	}
 	if protocol == protocol47 || protocol == protocol340 {
+		return loginStart.Bytes()
+	}
+	if _, ok := legacyProtocolConfigFor(protocol); ok {
+		return loginStart.Bytes()
+	}
+	if _, ok := flatProtocolConfigFor(protocol); ok {
+		return loginStart.Bytes()
+	}
+	if _, ok := codecProtocolConfigFor(protocol); ok {
 		return loginStart.Bytes()
 	}
 	protocols, err := DefaultModernProtocols()

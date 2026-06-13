@@ -10,20 +10,52 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const defaultVersions = [
-  "1.8.9",
+  "1.8.8",
+  "1.9",
+  "1.9.2",
+  "1.9.4",
+  "1.10",
+  "1.10.1",
+  "1.10.2",
+  "1.11",
+  "1.11.2",
+  "1.12",
+  "1.12.1",
   "1.12.2",
+  "1.13",
+  "1.13.1",
+  "1.13.2",
+  "1.14",
+  "1.14.1",
+  "1.14.3",
+  "1.14.4",
+  "1.15",
+  "1.15.1",
+  "1.15.2",
+  "1.16",
+  "1.16.1",
+  "1.16.2",
+  "1.16.3",
+  "1.16.4",
+  "1.16.5",
+  "1.17",
+  "1.17.1",
   "1.18",
+  "1.18.1",
   "1.18.2",
   "1.19",
   "1.19.2",
   "1.19.3",
   "1.19.4",
   "1.20",
+  "1.20.1",
   "1.20.2",
+  "1.20.3",
   "1.20.4",
   "1.20.5",
   "1.20.6",
   "1.21",
+  "1.21.1",
   "1.21.3",
   "1.21.4",
   "1.21.5",
@@ -37,6 +69,19 @@ const versionAliases = {
   "26.1": "1.21.11",
   "26.1.1": "1.21.11",
   "26.1.2": "1.21.11",
+};
+const protocolOverrides = {
+  "26.1.2": 775,
+};
+const packetIdOverrides = {
+  "26.1.2": {
+    "login.toServer.login_start": 0,
+    "login.toClient.success": 2,
+    "login.toServer.login_acknowledged": 3,
+    "configuration.toClient.finish_configuration": 3,
+    "configuration.toServer.finish_configuration": 3,
+    "play.toClient.map_chunk": 45,
+  },
 };
 const versions = process.argv.slice(2);
 const requestedVersions = versions.length > 0 ? versions : defaultVersions;
@@ -268,7 +313,12 @@ function rawCheckVersion(port, version) {
 }
 
 function packetId(data, state, direction, name) {
-	const packetType = data.protocol[state][direction].types.packet;
+	const overrideKey = `${state}.${direction}.${name}`;
+	const versionOverride = packetIdOverrides[data.version.minecraftVersion];
+	if (versionOverride && Object.hasOwn(versionOverride, overrideKey)) {
+		return versionOverride[overrideKey];
+	}
+  const packetType = data.protocol[state][direction].types.packet;
 	const nameField = packetType[1].find((field) => field.name === "name");
 	const mappings = nameField.type[1].mappings;
 	for (const [rawID, packetName] of Object.entries(mappings)) {
@@ -432,10 +482,23 @@ function dataForVersion(version) {
 	if (!data) {
 		throw new Error(`${version}: minecraft-data has no protocol data directory`);
 	}
+	if (protocolOverrides[version] && data.version.minecraftVersion !== version) {
+		return {
+			...data,
+			version: {
+				...data.version,
+				minecraftVersion: version,
+				version: protocolOverrides[version],
+			},
+		};
+	}
 	return data;
 }
 
 function protocolForVersion(version) {
+	if (protocolOverrides[version]) {
+		return protocolOverrides[version];
+	}
 	const direct = mcDataForVersion.versionsByMinecraftVersion?.pc?.[version];
 	if (direct?.version) {
 		return direct.version;
@@ -449,7 +512,7 @@ function stoneStateFor(version) {
     throw new Error(`${version}: minecraft-data has no stone block`);
   }
   const stone = data.blocksByName.stone;
-  if (version.startsWith("1.8.") || version === "1.12.2") {
+  if (protocolForVersion(version) <= 340) {
     return stone.id << 4;
   }
   if (typeof stone.defaultState === "number") {
@@ -462,7 +525,7 @@ function firstBlockState(version, chunkData) {
   if (version.startsWith("1.8.")) {
     return chunkData.readUInt16BE(0);
   }
-  return firstPalettedBlockState(chunkData, !version.startsWith("1.12."));
+  return firstPalettedBlockState(chunkData, protocolForVersion(version) >= 477);
 }
 
 function firstPalettedBlockState(chunkData, hasNonAirCount) {

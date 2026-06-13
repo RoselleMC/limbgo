@@ -58,7 +58,7 @@ type protocolVersionJSON struct {
 
 type loginPacketJSON struct {
 	DimensionCodec json.RawMessage `json:"dimensionCodec"`
-	Dimension      nbtValue        `json:"dimension"`
+	Dimension      json.RawMessage `json:"dimension"`
 }
 
 type registryJSON struct {
@@ -238,7 +238,7 @@ func readProtocolRegistries(pcDataDir string) (generatedData, error) {
 			if dimension != nil {
 				latestDimension = dimension
 			}
-		} else if version.Version >= 757 && !os.IsNotExist(err) {
+		} else if version.Version >= 735 && !os.IsNotExist(err) {
 			return generatedData{}, err
 		}
 		if latest != nil {
@@ -247,10 +247,10 @@ func readProtocolRegistries(pcDataDir string) (generatedData, error) {
 		if latestTags != nil {
 			out.Tags[version.Version] = cloneTags(latestTags)
 		}
-		if latestCodec != nil && version.Version >= 757 && version.Version < 766 {
+		if latestCodec != nil && version.Version >= 735 && version.Version < 766 {
 			out.Codecs[version.Version] = append([]byte(nil), latestCodec...)
 		}
-		if latestDimension != nil && version.Version >= 757 && version.Version < 759 {
+		if latestDimension != nil && version.Version >= 751 && version.Version < 759 {
 			out.Dimensions[version.Version] = append([]byte(nil), latestDimension...)
 		}
 	}
@@ -274,12 +274,15 @@ func readLoginRegistries(path string) ([]generatedRegistry, []generatedTagRegist
 	}
 
 	var dimension []byte
-	if login.Dimension.Type != "" {
-		encoded, err := encodeAnonymousNBT(login.Dimension)
-		if err != nil {
-			return nil, nil, nil, nil, fmt.Errorf("%s encode dimension: %w", path, err)
+	if len(login.Dimension) > 0 {
+		var dimensionNBT nbtValue
+		if err := json.Unmarshal(login.Dimension, &dimensionNBT); err == nil && dimensionNBT.Type != "" {
+			encoded, err := encodeAnonymousNBT(dimensionNBT)
+			if err != nil {
+				return nil, nil, nil, nil, fmt.Errorf("%s encode dimension: %w", path, err)
+			}
+			dimension = encoded
 		}
-		dimension = encoded
 	}
 
 	var typed nbtValue
@@ -898,9 +901,22 @@ func render(data generatedData) ([]byte, error) {
 
 func renderProtocolFiles(data generatedData) (map[string][]byte, error) {
 	files := map[string][]byte{}
-	ids := make([]int, 0, len(data.Registries))
+	idSet := make(map[int]struct{})
 	for protocol := range data.Registries {
-		ids = append(ids, int(protocol))
+		idSet[int(protocol)] = struct{}{}
+	}
+	for protocol := range data.Tags {
+		idSet[int(protocol)] = struct{}{}
+	}
+	for protocol := range data.Codecs {
+		idSet[int(protocol)] = struct{}{}
+	}
+	for protocol := range data.Dimensions {
+		idSet[int(protocol)] = struct{}{}
+	}
+	ids := make([]int, 0, len(idSet))
+	for id := range idSet {
+		ids = append(ids, id)
 	}
 	sort.Ints(ids)
 	for _, id := range ids {
@@ -945,12 +961,23 @@ func writeProtocolDir(outDir string, files map[string][]byte) error {
 	if err := os.MkdirAll(outDir, 0o755); err != nil {
 		return fmt.Errorf("create %s: %w", outDir, err)
 	}
+	maxGeneratedProtocol := 0
+	for name := range files {
+		protocol, err := strconv.Atoi(strings.TrimSuffix(name, filepath.Ext(name)))
+		if err == nil && protocol > maxGeneratedProtocol {
+			maxGeneratedProtocol = protocol
+		}
+	}
 	entries, err := os.ReadDir(outDir)
 	if err != nil {
 		return fmt.Errorf("read %s: %w", outDir, err)
 	}
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		protocol, parseErr := strconv.Atoi(strings.TrimSuffix(entry.Name(), filepath.Ext(entry.Name())))
+		if parseErr == nil && protocol > maxGeneratedProtocol {
 			continue
 		}
 		if err := os.Remove(filepath.Join(outDir, entry.Name())); err != nil {

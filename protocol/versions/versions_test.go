@@ -9,6 +9,7 @@ func TestLookupProtocol(t *testing.T) {
 		754: "1.16.5",
 		767: "1.21.1",
 		774: "1.21.11",
+		775: "26.1.2",
 	}
 
 	for protocol, wantLatest := range cases {
@@ -27,8 +28,8 @@ func TestLatestRelease(t *testing.T) {
 	if !ok {
 		t.Fatal("no latest release")
 	}
-	if latest.MinecraftVersion != "1.21.11" || latest.Protocol != 774 {
-		t.Fatalf("latest = %+v, want 1.21.11 protocol 774", latest)
+	if latest.MinecraftVersion != "26.1.2" || latest.Protocol != 775 {
+		t.Fatalf("latest = %+v, want 26.1.2 protocol 775", latest)
 	}
 }
 

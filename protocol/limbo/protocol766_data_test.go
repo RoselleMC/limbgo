@@ -37,8 +37,8 @@ func TestProtocol775DefaultWorldChunkContainsSpawnBedrock(t *testing.T) {
 	if !cfg.chunkFixedPalettedStorage {
 		t.Fatalf("protocol 775 chunkFixedPalettedStorage = false")
 	}
-	if !cfg.chunkSectionFluidCount {
-		t.Fatalf("protocol 775 chunkSectionFluidCount = false")
+	if cfg.chunkSectionFluidCount {
+		t.Fatalf("protocol 775 chunkSectionFluidCount = true")
 	}
 
 	world := limbgo.DefaultWorld("default")
@@ -56,5 +56,5 @@ func TestProtocol775DefaultWorldChunkContainsSpawnBedrock(t *testing.T) {
 	_ = wire.WriteVarInt(&packet, 0)
 
 	want := blockStateForProtocol(cfg.dataProtocolID(), world.BlockPalette(), 1)
-	assertChunkBlockModern(t, packet.Bytes(), true, false, true, true, int(limbgo.DefaultBedrockY/16), 0, want)
+	assertChunkBlockModern(t, packet.Bytes(), true, false, false, true, int(limbgo.DefaultBedrockY/16), 0, want)
 }

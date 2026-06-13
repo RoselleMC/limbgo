@@ -37,6 +37,15 @@ func TestEmbeddedZipLoadsProtocolRegistryFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load embedded registry zip: %v", err)
 	}
+	if codec, ok := data.DimensionCodec(735); !ok || len(codec) == 0 {
+		t.Fatalf("embedded registry zip missing protocol 735 dimension codec")
+	}
+	if codec, ok := data.DimensionCodec(756); !ok || len(codec) == 0 {
+		t.Fatalf("embedded registry zip missing protocol 756 dimension codec")
+	}
+	if dimension, ok := data.Dimension(756); !ok || len(dimension) == 0 {
+		t.Fatalf("embedded registry zip missing protocol 756 dimension")
+	}
 	if _, ok := data.Registries(775); !ok {
 		t.Fatalf("embedded registry zip missing protocol 775 registries")
 	}

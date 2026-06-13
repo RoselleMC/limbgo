@@ -128,7 +128,6 @@
     "spawn_info_sea_level": true,
     "position_flags_u32": true,
     "chunk_heightmap_array": true,
-    "chunk_section_fluid_count": true,
     "chunk_fixed_paletted_storage": true
   }
 }

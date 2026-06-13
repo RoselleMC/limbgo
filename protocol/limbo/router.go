@@ -165,6 +165,19 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 	case protocol340:
 		return serveProtocol340(ctx, conn, services, player)
 	default:
+		if cfg, ok := legacyProtocolConfigFor(info.ProtocolVersion); ok {
+			return serveLegacyProtocol(ctx, conn, services, player, cfg)
+		}
+		if cfg, ok := flatProtocolConfigFor(info.ProtocolVersion); ok {
+			return serveFlatProtocol(ctx, conn, services, player, cfg)
+		}
+		if cfg, ok := codecProtocolConfigFor(info.ProtocolVersion); ok {
+			registryData, err := r.registryData()
+			if err != nil {
+				return err
+			}
+			return serveCodecProtocol(ctx, conn, services, player, cfg, registryData)
+		}
 		if hasModernConfig {
 			registryData, err := r.registryData()
 			if err != nil {

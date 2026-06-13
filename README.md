@@ -58,7 +58,8 @@ MINECRAFT_DATA_PC_DIR=/path/to/minecraft-data/data/pc go generate ./protocol/ver
 Regenerate registry protocol files and their zip bundle with:
 
 ```sh
-go run ./tools/mcregistry-gen -pc-data /path/to/minecraft-data/data/pc -out-dir protocol/registrydata/protocols -zip-out protocol/registrydata/registrydata.zip
+go run ./tools/mcregistry-gen -pc-data /path/to/minecraft-data/data/pc -out-dir protocol/registrydata/protocols
+go generate ./protocol/registrydata
 ```
 
 If you only changed files under `protocol/registrydata/protocols`, rebuild the
@@ -199,9 +200,8 @@ overworld, nether, or end.
 ## Current Protocol State
 
 The current play-state adapters support Minecraft Java protocol `47`
-(`1.8.x`), protocol `340` (`1.12.2`), protocols `757`-`774`
-(`1.18` through `1.21.11`), and protocol `775` (`26.1` through `26.1.2`) as
-early end-to-end baselines:
+(`1.8.8`) through protocol `775` (`26.1.2`) for the release protocol lines
+present in the generated version index:
 
 - offline-mode login success;
 - join game;
@@ -209,18 +209,18 @@ early end-to-end baselines:
 - player position;
 - one spawn chunk using the generated packet ID table and a small legacy
   block-state translator. Protocol 47 uses the pre-palette chunk format;
-  protocol 340 uses a 4-bit section palette and packed long array; protocols
-  757-763 use the pre-configuration modern login packet with generated dimension
-  codec data; protocols 764-765 use the modern configuration phase with a
-  generated legacy dimension codec; protocol 766 and the compatible 1.21
-  protocol lines use generated minimal biome/chat/damage registry data, a
-  runtime dimension_type, heightmaps, light data, and modern paletted chunk
-  sections. Protocol 770+ uses the newer heightmap array / ByteArray chunk
-  packet shape. Protocol 775 uses a packet ID overlay derived from the 26.1.2
-  client protocol details and dedicated full registry/tag data for
-  configuration validation. Its chunk section storage uses the newer fixed
-  paletted long-array shape, while block-state IDs still reuse the protocol 774
-  translator until a newer block state table is available.
+  protocols 107-340 use the legacy 4-bit section palette; protocols 393-578 use
+  flattened block states with the 1.13/1.14/1.15 chunk breaks; protocols 735-756
+  use play-login dimension codecs; protocols 757-763 use the pre-configuration
+  modern login packet; protocols 764-765 use the modern configuration phase with
+  a generated legacy dimension codec; protocol 766 and the compatible 1.21
+  protocol lines use generated registry data, a runtime dimension_type,
+  heightmaps, light data, and modern paletted chunk sections. Protocol 770+ uses
+  the newer heightmap array packet shape. Protocol 775 uses a packet ID overlay
+  derived from the 26.1.2 client protocol details and dedicated full
+  registry/tag data for configuration validation. Its chunk section storage uses
+  the newer fixed paletted long-array shape, while block-state IDs still reuse
+  the protocol 774 translator until a newer block state table is available.
 
 Newer protocol lines are intentionally still rejected during login until their
 generated serializers are implemented. Server-list status/ping works through the

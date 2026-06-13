@@ -58,3 +58,27 @@ func TestUnknownProtocol(t *testing.T) {
 		t.Fatal("unexpected packet mapping for unknown protocol")
 	}
 }
+
+func TestPatchProtocolAliases(t *testing.T) {
+	cases := []struct {
+		protocol int32
+		alias    int32
+	}{
+		{protocol: 316, alias: 315},
+		{protocol: 753, alias: 751},
+		{protocol: 754, alias: 751},
+	}
+	for _, tt := range cases {
+		got, ok := ID(tt.protocol, StatePlay, ToClient, "login")
+		if !ok {
+			t.Fatalf("missing aliased login packet for protocol %d", tt.protocol)
+		}
+		want, ok := ID(tt.alias, StatePlay, ToClient, "login")
+		if !ok {
+			t.Fatalf("missing login packet for alias protocol %d", tt.alias)
+		}
+		if got != want {
+			t.Fatalf("protocol %d login packet = %d, want alias %d value %d", tt.protocol, got, tt.alias, want)
+		}
+	}
+}

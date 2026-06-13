@@ -16,6 +16,7 @@ func TestDefaultState(t *testing.T) {
 		{protocol: 340, name: "minecraft:stone", want: 16},
 		{protocol: 766, name: "minecraft:stone", want: 1},
 		{protocol: 774, name: "minecraft:stone", want: 1},
+		{protocol: 775, name: "minecraft:stone", want: 1},
 	}
 
 	for _, tt := range cases {
