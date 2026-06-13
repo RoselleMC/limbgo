@@ -53,6 +53,37 @@ func (fn LoginPolicyFunc) ResolveLoginMode(ctx context.Context, req LoginRequest
 	return fn(ctx, req)
 }
 
+// LoginDecision is the pre-encryption authentication decision for a login.
+type LoginDecision struct {
+	Mode LoginMode
+
+	// Profile optionally overrides the runtime identity for offline mode.
+	// Nil keeps the default OfflineLoginPlayer(req) behavior.
+	Profile *LoginProfile
+}
+
+// LoginProfile is an application-provided runtime identity for offline-mode
+// logins.
+type LoginProfile struct {
+	Name       string
+	UUID       string
+	Properties []ProfileProperty
+}
+
+// LoginPolicyV2 decides the login mode and optional offline runtime identity
+// before online-mode session proof is requested.
+type LoginPolicyV2 interface {
+	ResolveLogin(ctx context.Context, req LoginRequest) (LoginDecision, error)
+}
+
+// LoginPolicyV2Func adapts a function to LoginPolicyV2.
+type LoginPolicyV2Func func(context.Context, LoginRequest) (LoginDecision, error)
+
+// ResolveLogin implements LoginPolicyV2.
+func (fn LoginPolicyV2Func) ResolveLogin(ctx context.Context, req LoginRequest) (LoginDecision, error) {
+	return fn(ctx, req)
+}
+
 // SessionProof is the proof produced by Minecraft online-mode encryption login.
 type SessionProof struct {
 	Username        string
@@ -182,6 +213,32 @@ func OfflineLoginPlayer(req LoginRequest) Player {
 		AuthSource:      AuthSourceOffline,
 		Verified:        false,
 		Properties:      map[string]string{},
+	}
+}
+
+// OfflineLoginPlayerWithProfile returns an unverified offline-mode Player using
+// an application-provided runtime identity.
+func OfflineLoginPlayerWithProfile(req LoginRequest, profile LoginProfile) Player {
+	name := profile.Name
+	if name == "" {
+		name = req.Username
+	}
+	uuid := profile.UUID
+	if uuid == "" {
+		uuid = OfflineUUID(name)
+	}
+	properties := cloneProfileProperties(profile.Properties)
+	return Player{
+		Name:              name,
+		UUID:              uuid,
+		ProtocolVersion:   req.ProtocolVersion,
+		RemoteAddr:        req.RemoteAddr,
+		RequestedHost:     req.RequestedHost,
+		LoginMode:         LoginModeOffline,
+		AuthSource:        AuthSourceOffline,
+		Verified:          false,
+		Properties:        profilePropertiesMap(properties),
+		ProfileProperties: properties,
 	}
 }
 

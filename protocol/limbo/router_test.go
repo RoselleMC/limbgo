@@ -710,6 +710,214 @@ func TestProtocol774LoginPolicyCanChooseOnlineFromClaimedUUID(t *testing.T) {
 	}
 }
 
+func TestProtocol774LoginDecisionPolicyCanChooseOnlineFromClaimedUUID(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	gotReq := make(chan limbgo.LoginRequest, 1)
+	gotProof := make(chan limbgo.SessionProof, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginDecisionPolicy: limbgo.LoginPolicyV2Func(func(_ context.Context, req limbgo.LoginRequest) (limbgo.LoginDecision, error) {
+				gotReq <- req
+				if req.ClaimedUUID == testClaimedUUID {
+					return limbgo.LoginDecision{Mode: limbgo.LoginModeOnline}, nil
+				}
+				return limbgo.LoginDecision{Mode: limbgo.LoginModeOffline}, nil
+			}),
+			SessionVerifier: limbgo.SessionVerifierFunc(func(_ context.Context, proof limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				gotProof <- proof
+				return limbgo.VerifiedProfile{
+					UUID:     testClaimedUUID,
+					Name:     "TestPlayer",
+					Source:   "test-verifier",
+					Verified: true,
+				}, nil
+			}),
+		}.ServeConn(context.Background(), serverConn, testServices{
+			spawn: limbgo.SpawnTarget{World: "spawn", Position: limbgo.Vec3{X: 0, Y: 64, Z: 0}},
+			world: testWorld(),
+		})
+	}()
+
+	loginProtocolWithUUID(t, clientConn, protocol774, testClaimedUUID)
+	reader := bufio.NewReader(clientConn)
+	encryptionRequest := assertPacketID(t, reader, protocol774, packetid.StateLogin, "encryption_begin")
+	sharedSecret := []byte("0123456789abcdef")
+	writeEncryptionResponseFromRequest(t, clientConn, protocol774, encryptionRequest.Data, sharedSecret)
+	encryptedConn, err := newEncryptedConn(clientConn, sharedSecret)
+	if err != nil {
+		t.Fatalf("new encrypted conn: %v", err)
+	}
+	encryptedReader := bufio.NewReader(encryptedConn)
+	success := assertPacketID(t, encryptedReader, protocol774, packetid.StateLogin, "success")
+	assertModernLoginSuccess(t, success.Data, testClaimedUUID, "TestPlayer", 0)
+
+	req := <-gotReq
+	if req.Username != "TestPlayer" || req.ClaimedUUID != testClaimedUUID || req.ProtocolVersion != int(protocol774) {
+		t.Fatalf("login request = %+v", req)
+	}
+	proof := <-gotProof
+	if proof.Username != "TestPlayer" || proof.ProtocolVersion != int(protocol774) || proof.ServerID == "" {
+		t.Fatalf("proof = %+v", proof)
+	}
+	_ = encryptedConn.Close()
+	if err := <-errCh; err == nil {
+		t.Fatalf("router error = nil, want close/read error after test closes connection")
+	}
+}
+
+func TestProtocol774LoginDecisionPolicyMismatchForcesOfflineBeforeEncryption(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	const premiumUUID = "00000000-0000-0000-0000-000000000111"
+	gotReq := make(chan limbgo.LoginRequest, 1)
+	verifierCalled := make(chan struct{}, 1)
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginDecisionPolicy: limbgo.LoginPolicyV2Func(func(_ context.Context, req limbgo.LoginRequest) (limbgo.LoginDecision, error) {
+				gotReq <- req
+				if req.ClaimedUUID == premiumUUID {
+					return limbgo.LoginDecision{Mode: limbgo.LoginModeOnline}, nil
+				}
+				return limbgo.LoginDecision{Mode: limbgo.LoginModeOffline}, nil
+			}),
+			SessionVerifier: limbgo.SessionVerifierFunc(func(context.Context, limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				verifierCalled <- struct{}{}
+				return limbgo.VerifiedProfile{}, nil
+			}),
+		}.ServeConn(context.Background(), serverConn, testServices{
+			spawn: limbgo.SpawnTarget{World: "spawn", Position: limbgo.Vec3{X: 0, Y: 64, Z: 0}},
+			world: testWorld(),
+		})
+	}()
+
+	loginProtocolWithUUID(t, clientConn, protocol774, testClaimedUUID)
+	reader := bufio.NewReader(clientConn)
+	success := assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
+	assertModernLoginSuccess(t, success.Data, limbgo.OfflineUUID("TestPlayer"), "TestPlayer", 0)
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
+		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "position")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	req := <-gotReq
+	if req.Username != "TestPlayer" || req.ClaimedUUID != testClaimedUUID || req.ProtocolVersion != int(protocol774) {
+		t.Fatalf("login request = %+v", req)
+	}
+	select {
+	case <-verifierCalled:
+		t.Fatalf("session verifier was called for forced-offline login")
+	default:
+	}
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
+func TestProtocol774LoginDecisionPolicyOfflineProfileOverride(t *testing.T) {
+	serverConn, clientConn := net.Pipe()
+	defer clientConn.Close()
+
+	override := limbgo.LoginProfile{
+		Name: "OfflineRuntime",
+		UUID: "00000000-0000-0000-0000-000000000123",
+		Properties: []limbgo.ProfileProperty{{
+			Name:      "textures",
+			Value:     "texture-value",
+			Signature: "texture-signature",
+		}},
+	}
+	gotPlayer := make(chan limbgo.Player, 1)
+	verifierCalled := make(chan struct{}, 1)
+	services := testServices{
+		spawn: limbgo.SpawnTarget{
+			World:    "spawn",
+			Position: limbgo.Vec3{X: 0, Y: 64, Z: 0},
+			GameMode: limbgo.GameModeAdventure,
+		},
+		world: testWorld(),
+		events: limbgo.PlayerEventHandlerFuncs{
+			Join: func(_ context.Context, session limbgo.PlayerSession, event *limbgo.JoinEvent) error {
+				player := session.Player()
+				if event.Player.Name != player.Name || event.Player.UUID != player.UUID {
+					t.Fatalf("join event player = %+v, session player = %+v", event.Player, player)
+				}
+				gotPlayer <- player
+				return nil
+			},
+		},
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- Router{
+			Description: "limbgo test",
+			LoginDecisionPolicy: limbgo.LoginPolicyV2Func(func(context.Context, limbgo.LoginRequest) (limbgo.LoginDecision, error) {
+				return limbgo.LoginDecision{Mode: limbgo.LoginModeOffline, Profile: &override}, nil
+			}),
+			SessionVerifier: limbgo.SessionVerifierFunc(func(context.Context, limbgo.SessionProof) (limbgo.VerifiedProfile, error) {
+				verifierCalled <- struct{}{}
+				return limbgo.VerifiedProfile{}, nil
+			}),
+		}.ServeConn(context.Background(), serverConn, services)
+	}()
+
+	loginProtocolWithUUID(t, clientConn, protocol774, testClaimedUUID)
+	reader := bufio.NewReader(clientConn)
+	success := assertPacketID(t, reader, protocol774, packetid.StateLogin, "success")
+	assertModernLoginSuccess(t, success.Data, override.UUID, override.Name, int32(len(override.Properties)))
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateLogin, "login_acknowledged", nil)
+	for i := 0; i < expectedRegistryPacketCount(t, protocol774); i++ {
+		assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "registry_data")
+	}
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "tags")
+	assertPacketID(t, reader, protocol774, packetid.StateConfiguration, "finish_configuration")
+	writeServerboundNamedPacket(t, clientConn, protocol774, packetid.StateConfiguration, "finish_configuration", nil)
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "login")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "position")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_start")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "map_chunk")
+	assertPacketID(t, reader, protocol774, packetid.StatePlay, "chunk_batch_finished")
+
+	player := <-gotPlayer
+	if player.LoginMode != limbgo.LoginModeOffline || player.Verified || player.AuthSource != limbgo.AuthSourceOffline {
+		t.Fatalf("join player auth = %+v", player)
+	}
+	if player.Name != override.Name || player.UUID != override.UUID {
+		t.Fatalf("join player identity = %+v", player)
+	}
+	if player.Properties["textures"] != "texture-value" {
+		t.Fatalf("join player property map = %+v", player.Properties)
+	}
+	if len(player.ProfileProperties) != 1 || player.ProfileProperties[0].Signature != "texture-signature" {
+		t.Fatalf("join player profile properties = %+v", player.ProfileProperties)
+	}
+	select {
+	case <-verifierCalled:
+		t.Fatalf("session verifier was called for forced-offline profile override")
+	default:
+	}
+	_ = clientConn.Close()
+	if err := <-errCh; err != nil {
+		t.Fatalf("router error: %v", err)
+	}
+}
+
 func TestProtocol774OnlineModeUsesSessionVerifierProfile(t *testing.T) {
 	serverConn, clientConn := net.Pipe()
 	defer clientConn.Close()

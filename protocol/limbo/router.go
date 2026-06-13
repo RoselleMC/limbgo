@@ -51,6 +51,7 @@ type Router struct {
 	ProtocolPolicy      limbgo.ProtocolPolicy
 	LoginMode           limbgo.LoginMode
 	LoginPolicy         limbgo.LoginPolicy
+	LoginDecisionPolicy limbgo.LoginPolicyV2
 	SessionVerifier     limbgo.SessionVerifier
 	YggdrasilVerifier   limbgo.YggdrasilVerifierConfig
 	OnlineServerID      string
@@ -122,14 +123,14 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 		RemoteAddr:      conn.RemoteAddr(),
 		RequestedHost:   info.Address,
 	}
-	loginMode, err := r.resolveLoginMode(ctx, loginRequest)
+	loginDecision, err := r.resolveLoginDecision(ctx, loginRequest)
 	if err != nil {
 		return err
 	}
 	var player limbgo.Player
-	switch loginMode {
+	switch loginDecision.Mode {
 	case limbgo.LoginModeOffline:
-		player = limbgo.OfflineLoginPlayer(loginRequest)
+		player = offlineLoginPlayer(loginRequest, loginDecision.Profile)
 	case limbgo.LoginModeOnline:
 		verifier := r.sessionVerifier()
 		var profile limbgo.VerifiedProfile
@@ -156,7 +157,7 @@ func (r Router) serveLogin(ctx context.Context, conn net.Conn, reader *bufio.Rea
 			return err
 		}
 	default:
-		return fmt.Errorf("%w: unsupported login mode %q", limbgo.ErrInvalidLogin, loginMode)
+		return fmt.Errorf("%w: unsupported login mode %q", limbgo.ErrInvalidLogin, loginDecision.Mode)
 	}
 
 	switch info.ProtocolVersion {
@@ -217,21 +218,42 @@ func loginDisconnectConn(primary net.Conn, fallback net.Conn) net.Conn {
 	return fallback
 }
 
-func (r Router) resolveLoginMode(ctx context.Context, req limbgo.LoginRequest) (limbgo.LoginMode, error) {
+func (r Router) resolveLoginDecision(ctx context.Context, req limbgo.LoginRequest) (limbgo.LoginDecision, error) {
+	if r.LoginDecisionPolicy != nil {
+		decision, err := r.LoginDecisionPolicy.ResolveLogin(ctx, req)
+		if err != nil {
+			return limbgo.LoginDecision{}, err
+		}
+		return normalizeLoginDecision(decision), nil
+	}
 	if r.LoginPolicy != nil {
 		mode, err := r.LoginPolicy.ResolveLoginMode(ctx, req)
 		if err != nil {
-			return "", err
+			return limbgo.LoginDecision{}, err
 		}
-		if mode == "" {
-			return limbgo.LoginModeOffline, nil
-		}
-		return mode, nil
+		return normalizeLoginDecision(limbgo.LoginDecision{Mode: mode}), nil
 	}
 	if r.LoginMode == "" {
-		return limbgo.LoginModeOffline, nil
+		return limbgo.LoginDecision{Mode: limbgo.LoginModeOffline}, nil
 	}
-	return r.LoginMode, nil
+	return limbgo.LoginDecision{Mode: r.LoginMode}, nil
+}
+
+func normalizeLoginDecision(decision limbgo.LoginDecision) limbgo.LoginDecision {
+	if decision.Mode == "" {
+		decision.Mode = limbgo.LoginModeOffline
+	}
+	if decision.Mode != limbgo.LoginModeOffline {
+		decision.Profile = nil
+	}
+	return decision
+}
+
+func offlineLoginPlayer(req limbgo.LoginRequest, profile *limbgo.LoginProfile) limbgo.Player {
+	if profile == nil {
+		return limbgo.OfflineLoginPlayer(req)
+	}
+	return limbgo.OfflineLoginPlayerWithProfile(req, *profile)
 }
 
 func (r Router) sessionVerifier() limbgo.SessionVerifier {

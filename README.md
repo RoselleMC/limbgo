@@ -184,7 +184,9 @@ used as a custom Yggdrasil/sessionserver root. Application callbacks and hybrid
 per-connection policy are available through the Go API rather than the static
 JSON config. A `LoginPolicy` receives the client-declared `ClaimedUUID` from
 `login_start` when that protocol carries one, allowing applications to choose
-offline or online mode before vanilla session proof starts.
+offline or online mode before vanilla session proof starts. Use
+`LoginDecisionPolicy` when forced-offline users also need an application-chosen
+runtime name, UUID, or profile properties before Login Success is sent.
 
 The Go session API can also offer resource packs after join and receive client
 status events. Modern clients support stable pack IDs and removal; older clients

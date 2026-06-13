@@ -63,6 +63,37 @@ func TestOfflineLoginPlayerMarksUnverifiedClaim(t *testing.T) {
 	}
 }
 
+func TestOfflineLoginPlayerWithProfileOverridesRuntimeIdentity(t *testing.T) {
+	player := OfflineLoginPlayerWithProfile(LoginRequest{
+		Username:        "PremiumClaim",
+		ProtocolVersion: 774,
+		RequestedHost:   "login.example",
+	}, LoginProfile{
+		Name: "OfflineRuntime",
+		UUID: "00000000-0000-0000-0000-000000000123",
+		Properties: []ProfileProperty{{
+			Name:      "textures",
+			Value:     "texture-value",
+			Signature: "texture-signature",
+		}},
+	})
+	if player.LoginMode != LoginModeOffline || player.Verified || player.AuthSource != AuthSourceOffline {
+		t.Fatalf("offline player auth metadata = %+v", player)
+	}
+	if player.Name != "OfflineRuntime" || player.UUID != "00000000-0000-0000-0000-000000000123" {
+		t.Fatalf("offline player identity = %+v", player)
+	}
+	if player.ProtocolVersion != 774 || player.RequestedHost != "login.example" {
+		t.Fatalf("offline player request metadata = %+v", player)
+	}
+	if player.Properties["textures"] != "texture-value" {
+		t.Fatalf("offline player property map = %+v", player.Properties)
+	}
+	if len(player.ProfileProperties) != 1 || player.ProfileProperties[0].Signature != "texture-signature" {
+		t.Fatalf("offline player profile properties = %+v", player.ProfileProperties)
+	}
+}
+
 func TestOfflineUUIDMatchesVanillaAlgorithm(t *testing.T) {
 	tests := map[string]string{
 		"Steve":      "5627dd98-e6be-3c21-b8a8-e92344183641",

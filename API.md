@@ -179,7 +179,11 @@ router := limbo.Router{
 Only errors wrapping `limbgo.ErrInvalidLogin` fall back to offline mode. Verifier
 outages such as rate limits, proxy failures, or upstream 5xx errors should wrap
 `limbgo.ErrSessionUnavailable` or another non-invalid error so the connection is
-rejected instead of silently downgrading identity.
+rejected instead of silently downgrading identity. Hybrid fallback is best
+effort: after limbgo sends an Encryption Request, an invalid-session client may
+disconnect before sending an Encryption Response. If an application needs a
+deterministic online/offline split, make that decision before encryption with
+`LoginPolicy` or `LoginDecisionPolicy`.
 
 Deployments can also choose offline or online mode per connection before any
 session proof is requested:
@@ -195,6 +199,39 @@ router := limbo.Router{
 	SessionVerifier: appVerifier,
 }
 ```
+
+Use `LoginDecisionPolicy` when the application also needs to replace the
+runtime identity for a forced-offline connection:
+
+```go
+router := limbo.Router{
+	LoginDecisionPolicy: limbgo.LoginPolicyV2Func(func(ctx context.Context, req limbgo.LoginRequest) (limbgo.LoginDecision, error) {
+		if claimedUUIDMatchesPremiumProfile(req.Username, req.ClaimedUUID) {
+			return limbgo.LoginDecision{Mode: limbgo.LoginModeOnline}, nil
+		}
+		return limbgo.LoginDecision{
+			Mode: limbgo.LoginModeOffline,
+			Profile: &limbgo.LoginProfile{
+				Name: "offline:" + req.Username,
+				UUID: allocateOfflineRuntimeUUID(req.Username),
+				Properties: []limbgo.ProfileProperty{{
+					Name:  "textures",
+					Value: runtimeTextureValue(req.Username),
+				}},
+			},
+		}, nil
+	}),
+	SessionVerifier: appVerifier,
+}
+```
+
+`ModeOffline` with a nil `Profile` keeps the default
+`OfflineLoginPlayer(req)` behavior. `ModeOffline` with a `Profile` uses that
+runtime name, UUID, and profile properties in Login Success and in
+`PlayerSession.Player()`. `ModeOnline` and successfully verified hybrid logins
+ignore the override and use the `VerifiedProfile` returned by
+`SessionVerifier`. When both `LoginDecisionPolicy` and the older `LoginPolicy`
+are set, `LoginDecisionPolicy` runs.
 
 `LoginRequest.ClaimedUUID` is the UUID declared by the client in `login_start`,
 formatted with dashes when the protocol version carries one. It is empty on
